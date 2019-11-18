@@ -1,0 +1,17 @@
+{
+  "name": "watch-lb",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "node-html-parser": "^1.1.16",
+    "node-telegram-bot-api": "^0.40.0",
+    "node-wget": "^0.4.3"
+  }
+}
