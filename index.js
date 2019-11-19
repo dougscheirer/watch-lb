@@ -1,3 +1,6 @@
+// .env reader
+require('dotenv').config()
+
 const curl = new (require( 'curl-request' ))();
 const parser = require('node-html-parser');
 const telegram = require('node-telegram-bot-api');
@@ -13,13 +16,25 @@ var lastMD5Update = null;
 var lastIntervalUpdate = null;
 var defaultRate = null;
 
-// Matches "/uptick [whatever]"
+// Matches "/start"
+api.onText(/\/start/, (msg, match) => {
+    const chatId = msg.chat.id;
+  
+    sendMessage("Your chat id is " + chatId);
+  });
+
+// Matches "/status"
 api.onText(/\/status/, (msg, match) => {
     const chatId = msg.chat.id;
   
     sendMessage("Last check at " + lastIntervalUpdate + ", last difference at " + lastMD5Update);
   });
-  
+
+ // Matches "/now"
+api.onText(/\/now/, (msg, match) => {
+    checkWines(true);
+  });
+
   // Matches "/uptick [whatever]"
 api.onText(/\/uptick (.+)/, (msg, match) => {
     const chatId = msg.chat.id;
@@ -53,7 +68,7 @@ function sendMessage(message) {
     return api.sendMessage(process.env.CHAT_ID, message);
 }
 
-function checkWines() {
+function checkWines(reportNothing) {
     lastIntervalUpdate = new Date();
     curl.get("https://lastbottlewines.com")
     .then(({statusCode, body, headers}) => {
@@ -104,7 +119,8 @@ function checkWines() {
                 return;
             }
         }
-        // sendMessage("No matching terms for '" + offerName.rawText + "'");
+        if (!!reportNothing) 
+            sendMessage("No matching terms in '" + offerName.rawText + "'");
         console.log("No matching terms for '" + offerName.rawText + "'");
     })
     .catch((e) => {
