@@ -5,7 +5,42 @@ const crypto = require('crypto');
 
 // console.log(process.env);
 
-const api = new telegram(process.env.API_TOKEN);
+const api = new telegram(process.env.API_TOKEN, {polling: true} );
+
+var intervalTimer = null;
+var lastMD5 = null;
+var lastMD5Update = null;
+var lastIntervalUpdate = null;
+var defaultRate = null;
+
+// Matches "/uptick [whatever]"
+api.onText(/\/status/, (msg, match) => {
+    const chatId = msg.chat.id;
+  
+    sendMessage("Last check at " + lastIntervalUpdate + ", last difference at " + lastMD5Update);
+  });
+  
+  // Matches "/uptick [whatever]"
+api.onText(/\/uptick (.+)/, (msg, match) => {
+    const chatId = msg.chat.id;
+    var number = null;
+    if (match[1] == "default") {
+        number = defaultRate;
+    } else {
+        number = parseInt(match[1]);
+    }
+
+    if (!number) {
+        sendMessage(match[1] + " is not a number.  Specify a number of minutes to change the check interval");
+        return;
+    }
+  
+    // increase the frequency of checks to (match) minutes
+    clearInterval(intervalTimer);
+    checkWines();
+    intervalTimer = setInterval(checkWines, number*1000*60);
+    sendMessage("Check interval changed to " + number + " minutes");
+  });
 
 function logError(message) {
     console.log("ERROR >>>");   
@@ -18,10 +53,8 @@ function sendMessage(message) {
     return api.sendMessage(process.env.CHAT_ID, message);
 }
 
-var lastMD5 = null;
-var lastMD5Update = null;
-
 function checkWines() {
+    lastIntervalUpdate = new Date();
     curl.get("https://lastbottlewines.com")
     .then(({statusCode, body, headers}) => {
         if (statusCode != 200) {
@@ -88,9 +121,10 @@ if (process.argv.length > 2) {
     }
 }
 
-// start one to initiate the process
-checkWines();
-if (!runOnce) {  // env CHECK_RATE in minutes or 15 
-    setInterval(checkWines, 1000*60*(process.env.CHECK_RATE || 15));
+// TODO: re-enable start one to initiate the process
+// checkWines();
+if (!runOnce) {  // env CHECK_RATE in minutes or 15
+    defaultRate = process.env.CHECK_RATE || 15;
+    intervalTimer = setInterval(checkWines, 1000*60*defaultRate);
 }
 
