@@ -12,6 +12,7 @@
   "dependencies": {
     "curl-request": "^1.1.1",
     "dotenv": "^8.2.0",
+    "moment": "^2.24.0",
     "node-html-parser": "^1.1.16",
     "node-telegram-bot-api": "^0.40.0"
   }

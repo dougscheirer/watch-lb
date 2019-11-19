@@ -5,6 +5,8 @@ const curl = new (require( 'curl-request' ))();
 const parser = require('node-html-parser');
 const telegram = require('node-telegram-bot-api');
 const crypto = require('crypto');
+const os = require('os');
+const mjs = require('moment');
 
 // console.log(process.env);
 
@@ -26,8 +28,12 @@ api.onText(/\/start/, (msg, match) => {
 // Matches "/status"
 api.onText(/\/status/, (msg, match) => {
     const chatId = msg.chat.id;
-  
-    sendMessage("Last check at " + lastIntervalUpdate + ", last difference at " + lastMD5Update);
+    const duration = mjs.duration(lastIntervalUpdate - lastMD5Update);
+    if (lastMD5Update == null) {
+        sendMessage("Never checked");
+        return;
+    }
+    sendMessage("Last check at " + lastIntervalUpdate + "\nLast difference at " + lastMD5Update + " (" + duration.humanize() + ")");
   });
 
  // Matches "/now"
@@ -137,10 +143,21 @@ if (process.argv.length > 2) {
     }
 }
 
-// TODO: re-enable start one to initiate the process
+// does it look like the system just started?
+
+if (os.uptime() < 5*60) {
+    sendMessage("Looks like the system just restarted, uptime is " + os.uptime());
+    // just in case, run an initial check
+    checkWines();
+}
+
+// TODO: re-enable?
+// start one to initiate the process
 // checkWines();
 if (!runOnce) {  // env CHECK_RATE in minutes or 15
     defaultRate = process.env.CHECK_RATE || 15;
     intervalTimer = setInterval(checkWines, 1000*60*defaultRate);
 }
+
+
 
