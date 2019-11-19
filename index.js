@@ -55,9 +55,9 @@ function checkWines() {
         lastMD5=hash;
         lastMD5Update=new Date();
 
-        const matching = ["bordeaux", "mounts", "trespass", "cabernet", "franc", "rioja", "sryah"];
+        const matching = ["bordeaux", "mounts", "trespass", "cabernet", "franc", "rioja", "sryah", "emilion", "les pez", "les ormes" ];
         for (name in matching) {
-            if (offerName.rawText.match(new RegExp(matching[name], "i"))) {
+            if (body.match(new RegExp(matching[name], "i"))) {
                 sendMessage("Found a match for " + matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com")
                     .then(function(data)
                     {
@@ -79,12 +79,18 @@ function checkWines() {
     });
 }
 
-if (process.argv.length > 2 && process.argv[2] == "runonce") {
-    checkWines();
-} else {
-    // start one to initiate the process
-    checkWines();
-    // env CHECK_RATE in minutes or 15 
+var runOnce = false;
+if (process.argv.length > 2) {
+    if (process.argv[2] == "runonce") {
+        runOnce = true;
+    } else if (process.argv[2] == "ping") {
+        sendMessage("Starting up at " + (new Date()))
+    }
+}
+
+// start one to initiate the process
+checkWines();
+if (!runOnce) {  // env CHECK_RATE in minutes or 15 
     setInterval(checkWines, 1000*60*(process.env.CHECK_RATE || 15));
 }
 
