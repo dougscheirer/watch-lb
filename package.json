@@ -10,8 +10,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "curl-request": "^1.1.1",
     "node-html-parser": "^1.1.16",
-    "node-telegram-bot-api": "^0.40.0",
-    "node-wget": "^0.4.3"
+    "node-telegram-bot-api": "^0.40.0"
   }
 }
