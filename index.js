@@ -6,8 +6,6 @@ const parser = require('node-html-parser');
 const telegram = require('node-telegram-bot-api');
 const crypto = require('crypto');
 
-// console.log(process.env);
-
 const api = new telegram(process.env.API_TOKEN, {polling: true} );
 
 var intervalTimer = null;
@@ -16,7 +14,7 @@ var lastMD5Update = null;
 var lastIntervalUpdate = null;
 var defaultRate = null;
 
-var matching = ["bordeaux", "mounts", "trespass", "cabernet", "franc", "rioja", "sryah", "emilion", "les pez", "les ormes" ];
+var matching = ["bordeaux", "mounts", "trespass", "cabernet", "franc", "rioja", "syrah", "emilion", "les ormes" ];
 
 // /start
 api.onText(/\/start/, (msg, match) => {
@@ -27,7 +25,6 @@ api.onText(/\/start/, (msg, match) => {
 
 // /status
 api.onText(/\/status/, (msg, match) => {
-    const chatId = msg.chat.id;
     console.log(msg);
     console.log(msg.chat);
     sendMessage("Last check at " + lastIntervalUpdate + ", last difference at " + lastMD5Update);
@@ -59,7 +56,6 @@ api.onText(/\/now/, (msg, match) => {
 
 // /uptick (time | default)"
 api.onText(/\/uptick (.+)/, (msg, match) => {
-    const chatId = msg.chat.id;
     var number = null;
     if (match[1] == "default") {
         number = defaultRate;
