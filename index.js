@@ -16,26 +16,48 @@ var lastMD5Update = null;
 var lastIntervalUpdate = null;
 var defaultRate = null;
 
-// Matches "/start"
+var matching = ["bordeaux", "mounts", "trespass", "cabernet", "franc", "rioja", "sryah", "emilion", "les pez", "les ormes" ];
+
+// /start
 api.onText(/\/start/, (msg, match) => {
     const chatId = msg.chat.id;
   
     sendMessage("Your chat id is " + chatId);
   });
 
-// Matches "/status"
+// /status
 api.onText(/\/status/, (msg, match) => {
     const chatId = msg.chat.id;
-  
+    console.log(msg);
+    console.log(msg.chat);
     sendMessage("Last check at " + lastIntervalUpdate + ", last difference at " + lastMD5Update);
   });
 
- // Matches "/now"
+// /list
+api.onText(/\/list/, (msg, match) => {
+    sendMessage("Current search terms:\n" + matching.join("\n"));
+});
+
+// /add (term)
+api.onText(/\/add (.+)/, (msg, match) => {
+    const toAdd = match[1].toLowerCase();
+    if (matching.indexOf(toAdd) >= 0 ) {
+        sendMessage(toAdd + " is already a search term");
+        return;
+    }
+    matching.push(toAdd);
+    // invalidate the MD5 cache
+    lastMD5 = null;
+    lastMD5Update = null;
+    checkWines(true);
+});
+
+// /now
 api.onText(/\/now/, (msg, match) => {
     checkWines(true);
   });
 
-  // Matches "/uptick [whatever]"
+// /uptick (time | default)"
 api.onText(/\/uptick (.+)/, (msg, match) => {
     const chatId = msg.chat.id;
     var number = null;
@@ -89,7 +111,10 @@ function checkWines(reportNothing) {
         // TODO: write hash to a local FS to tell when page has changed?
         const hash=crypto.createHash('md5').update(body).digest("hex");
         if (hash == lastMD5) {
-            console.log("No changes, skipping");
+            if (!!reportNothing) {
+                sendMessage("No changes since last update");
+            }
+            console.log("No changes since last update");
             if (lastMD5Update != null) {
                 console.log("Time since last change: " + ((new Date()) - lastMD5Update));
                 // how long since it changed?  are we not getting updates?
@@ -103,7 +128,6 @@ function checkWines(reportNothing) {
         lastMD5=hash;
         lastMD5Update=new Date();
 
-        const matching = ["bordeaux", "mounts", "trespass", "cabernet", "franc", "rioja", "sryah", "emilion", "les pez", "les ormes" ];
         for (name in matching) {
             if (body.match(new RegExp(matching[name], "i"))) {
                 sendMessage("Found a match for " + matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com")
@@ -137,8 +161,6 @@ if (process.argv.length > 2) {
     }
 }
 
-// TODO: re-enable start one to initiate the process
-// checkWines();
 if (!runOnce) {  // env CHECK_RATE in minutes or 15
     defaultRate = process.env.CHECK_RATE || 15;
     intervalTimer = setInterval(checkWines, 1000*60*defaultRate);
