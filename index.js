@@ -37,9 +37,14 @@ api.onText(/\/status/, (msg, match) => {
     console.log(msg.chat);
   });
 
+
+function sendList() {
+    sendMessage("Current search terms:\n" + matching.join("\n"));
+}
+
 // /list
 api.onText(/\/list/, (msg, match) => {
-    sendMessage("Current search terms:\n" + matching.join("\n"));
+    sendList();
 });
 
 // /add (term)
@@ -50,6 +55,22 @@ api.onText(/\/add (.+)/, (msg, match) => {
         return;
     }
     matching.push(toAdd);
+    sendList();
+    // invalidate the MD5 cache
+    lastMD5 = null;
+    lastMD5Update = null;
+    checkWines(true);
+});
+
+// /remove (term)
+api.onText(/\/del (.+)/, (msg, match) => {
+    const toDel = match[1].toLowerCase();
+    if (matching.indexOf(toDel) < 0 ) {
+        sendMessage(toDel + " is not a search term");
+        return;
+    }
+    matching.splice(matching.indexOf(toDel));
+    sendList();
     // invalidate the MD5 cache
     lastMD5 = null;
     lastMD5Update = null;
@@ -59,7 +80,7 @@ api.onText(/\/add (.+)/, (msg, match) => {
 // /now
 api.onText(/\/now/, (msg, match) => {
     checkWines(true);
-  });
+});
 
 // /uptick (time | default)"
 api.onText(/\/uptick (.+)/, (msg, match) => {
@@ -80,7 +101,7 @@ api.onText(/\/uptick (.+)/, (msg, match) => {
     checkWines();
     intervalTimer = setInterval(checkWines, number*1000*60);
     sendMessage("Check interval changed to " + number + " minutes");
-  });
+});
 
 function logError(message) {
     console.log("ERROR >>>");   
