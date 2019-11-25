@@ -15,6 +15,7 @@ var lastMD5 = null;
 var lastMD5Update = null;
 var lastIntervalUpdate = null;
 var defaultRate = null;
+var sent24hrMessage = false;
 
 var matching = ["bordeaux", "mounts", "trespass", "cabernet", "franc", "rioja", "syrah", "emilion", "les ormes" ];
 
@@ -113,21 +114,21 @@ function checkWines(reportNothing) {
 
         // TODO: write hash to a local FS to tell when page has changed?
         const hash=crypto.createHash('md5').update(body).digest("hex");
-        if (hash == lastMD5) {
-            if (!!reportNothing) {
-                sendMessage("No changes since last update");
-            }
+        if (!reportNothing && hash == lastMD5) {
             console.log("No changes since last update");
             if (lastMD5Update != null) {
                 console.log("Time since last change: " + ((new Date()) - lastMD5Update));
                 // how long since it changed?  are we not getting updates?
-                if (((new Date()) - lastMD5Update) > 24*60*60*1000) {
+                if (!sent24hrMessage && ((new Date()) - lastMD5Update) > 24*60*60*1000) {
+                    sent24hrMessage = true;
                     sendMessage("No updates for more than 24h");
                 }
             }
             return;
         }
+
         // remember the MD5
+        sent24hrMessage=false;
         lastMD5=hash;
         lastMD5Update=new Date();
 
