@@ -15,7 +15,7 @@ const client = redis.createClient(opts);
 const getAsync = promisify(client.get).bind(client);
 
 // connect to telegram
-const api = (process.env.NO_TELEGRAM == 1) ? new telegram(process.env.API_TOKEN, {polling: true} ) : null;
+const api = (process.env.NO_TELEGRAM != 1) ? new telegram(process.env.API_TOKEN, {polling: true} ) : null;
 
 var intervalTimer = null;
 var lastMD5 = null;
@@ -206,6 +206,7 @@ if (process.argv.length > 2) {
 
 // is the redis server in a default state?  if so, init with defaults
 getAsync('matching').then((res) => {
+    console.log('matching: ' + res);
     if (!res) {
         // initialize matching
         console.log("Initializing from defaults");
@@ -224,6 +225,7 @@ getAsync('matching').then((res) => {
 // just do a test run?
 if (!runOnce) {  
     getAsync('defaultRate').then((res) => {
+	console.log("defaultRate is " + res);
         defaultRate = (res) ? res : (process.env.CHECK_RATE || 15);
         intervalTimer = setInterval(checkWines, 1000*60*defaultRate);
     });
