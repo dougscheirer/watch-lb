@@ -17,7 +17,7 @@ var lastIntervalUpdate = null;
 var defaultRate = null;
 var sent24hrMessage = false;
 
-var matching = ["bordeaux", "mounts", "trespass", "cabernet", "franc", "rioja", "syrah", "emilion", "les ormes" ];
+var matching = [ "bordeaux", "mounts", "trespass", "cabernet", "franc", "rioja", "syrah", "emilion", "les ormes", "petit" ];
 
 // /start
 api.onText(/\/start/, (msg, match) => {
