@@ -11,4 +11,4 @@ services:
     container_name: watch-lb
     image: "dscheirer/watch-lb"
     env_file:
-      - .env
+      - .env-docker
