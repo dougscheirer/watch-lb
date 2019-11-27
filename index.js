@@ -6,37 +6,24 @@ const telegram = require('node-telegram-bot-api');
 const crypto = require('crypto');
 const os = require('os');
 const mjs = require('moment');
-var redis = require("redis");
+const redis = require("redis");
 const {promisify} = require('util');
 
 // determine redis host from environment and connect
-const opts = { host: process.env.REDIS_HOST || "localhost" };
+const opts = { host: process.env.REDIS_HOST || "localhost", port: process.env.REDIS_PORT || 6379 };
 const client = redis.createClient(opts);
 const getAsync = promisify(client.get).bind(client);
 
 // connect to telegram
 const api = (process.env.NO_TELEGRAM != 1) ? new telegram(process.env.API_TOKEN, {polling: true} ) : null;
 
-var intervalTimer = null;
-var lastMD5 = null;
-var lastMD5Update = null;
-var lastIntervalUpdate = null;
-var defaultRate = null;
-var sent24hrMessage = false;
+var runtimeSettings = {
+    intervalTimer: null,
+}
 
-// /status
-api.onText(/\/status/, (msg, match) => {
-    const duration = mjs.duration(lastIntervalUpdate - lastMD5Update);
-    if (lastMD5Update == null) {
-        sendMessage("Never checked");
-        return;
-    }
-    sendMessage("Last check at " + lastIntervalUpdate + "\nLast difference at " + lastMD5Update + " (" + duration.humanize() + ")");
-    console.log(msg);
-    console.log(msg.chat);
-  });
+var currentDefault = null;
 
-
+// only do whole word matching
 const matching_default = [
     "bordeaux", 
     "mounts", 
@@ -48,78 +35,95 @@ const matching_default = [
     "emilion", 
     "les ormes", 
     "petit"];
-var matching = null;
+
+var savedSettings = {
+  lastMD5: null,
+  lastMD5Update: null,
+  lastIntervalUpdate: null,
+  sent24hrMessage: false,
+  matching: matching_default,
+  defaultRate: null
+}
+
+function saveSettings() {
+    client.set('watch-lb-settings', JSON.stringify(savedSettings));
+}
 
 function sendList() {
-    sendMessage("Current search terms:\n" + matching.join("\n"));
+    sendMessage("Current search terms:\n" + savedSettings.matching.join("\n"));
 }
 
 if (api) {
     // /start
-    api.onText(/\/start/, (msg) => {
+    api.onText(/\/start$/, (msg) => {
         const chatId = msg.chat.id;
     
         sendMessage("Your chat id is " + chatId);
     });
 
     // /list
-    api.onText(/\/list/, (msg) => {
+    api.onText(/\/list$/, (msg) => {
+        sendList();
+    });
+
+    // /list default
+    api.onText(/\/list default$/, (msg) => {
+        savedSettings.matching = matching_default;
+        saveSettings();
+        console.log("Restored default list");
         sendList();
     });
     
-        // /status
-    api.onText(/\/status/, (msg) => {
-        const duration = mjs.duration(lastIntervalUpdate - lastMD5Update);
-        if (lastMD5Update == null) {
+    // /status
+    api.onText(/\/status$/, (msg) => {
+        const duration = mjs.duration(savedSettings.lastIntervalUpdate - savedSettings.lastMD5Update);
+        if (savedSettings.lastMD5Update == null) {
             sendMessage("Never checked");
             return;
         }
-        sendMessage("Last check at " + lastIntervalUpdate + "\nLast difference at " + lastMD5Update + " (" + duration.humanize() + ")");
+        sendMessage("Last check at " + savedSettings.lastIntervalUpdate + "\nLast difference at " + savedSettings.lastMD5Update + " (" + duration.humanize() + ")");
         console.log(msg);
         console.log(msg.chat);
     });
 
-    // /list
-    api.onText(/\/list/, (msg) => {
-        sendMessage("Current search terms:\n" + matching.join("\n"));
-    });
-
     // /add (term)
-    api.onText(/\/add (.+)/, (msg) => {
+    api.onText(/\/add (.+)/, (msg, match) => {
         const toAdd = match[1].toLowerCase();
-        if (matching.indexOf(toAdd) >= 0 ) {
+        if (savedSettings.matching.indexOf(toAdd) >= 0 ) {
             sendMessage(toAdd + " is already a search term");
             return;
         }
-        matching.push(toAdd);
+        savedSettings.matching.push(toAdd);
         sendList();
-        // write to redis
-        client.set("matching", JSON.stringify(matching));
         // invalidate the MD5 cache
-        lastMD5 = null;
-        lastMD5Update = null;
+        savedSettings.lastMD5 = null;
+        savedSettings.lastMD5Update = null;
+        // write to redis
+        saveSettings();
         checkWines(true);
     });
 
     // /del (term)
     api.onText(/\/del (.+)/, (msg, match) => {
         const toDel = match[1].toLowerCase();
-        if (matching.indexOf(toDel) < 0 ) {
+        if (savedSettings.matching.indexOf(toDel) < 0 ) {
             sendMessage(toDel + " is not a search term");
             return;
         }
-        matching.splice(toDel, 1);
+        savedSettings.matching.splice(toDel, 1);
         sendList();
         // write to redis
-        client.set("matching", JSON.stringify(matching));
+        saveSettings();
         // invalidate the MD5 cache
-        lastMD5 = null;
-        lastMD5Update = null;
+        savedSettings.lastMD5 = null;
+        savedSettings.lastMD5Update = null;
+        // write to redis
+        saveSettings();
         checkWines(true);
     });
     
     // /now
-    api.onText(/\/now/, (msg) => {
+    api.onText(/\/now$/, (msg) => {
         checkWines(true);
     });
 
@@ -127,22 +131,23 @@ if (api) {
     api.onText(/\/uptick (.+)/, (msg, match) => {
         var number = null;
         if (match[1] == "default") {
-            number = defaultRate;
+            number = savedSettings.defaultRate;
         } else {
             number = parseInt(match[1]);
         }
 
         if (!number) {
-            sendMessage(match[1] + " is not a number.  Specify a number of minutes to change the check interval");
+            sendMessage(match[1] + " is not a valid number.  Specify a number of minutes to change the check interval");
             return;
         }
     
-        // increase the frequency of checks to (match) minutes
-        clearInterval(intervalTimer);
+        // change the frequency of checks to (match) minutes
+        clearInterval(runtimeSettings.intervalTimer);
         checkWines();
-        intervalTimer = setInterval(checkWines, number*1000*60);
+        runtimeSettings.intervalTimer = setInterval(checkWines, number*1000*60);
         // save the last setting
-        client.set('defaultRate', number);
+        savedSettings.defaultRate = number;
+        saveSettings();
         sendMessage("Check interval changed to " + number + " minutes");
     });
 }
@@ -159,7 +164,7 @@ function sendMessage(message) {
 }
 
 function checkWines(reportNothing) {
-    lastIntervalUpdate = new Date();
+    savedSettings.lastIntervalUpdate = new Date();
     curl.get("https://lastbottlewines.com")
     .then(({statusCode, body, headers}) => {
         if (statusCode != 200) {
@@ -178,27 +183,29 @@ function checkWines(reportNothing) {
 
         // TODO: write hash to a local FS to tell when page has changed?
         const hash=crypto.createHash('md5').update(body).digest("hex");
-        if (!reportNothing && hash == lastMD5) {
+        if (!reportNothing && hash == savedSettings.lastMD5) {
             console.log("No changes since last update");
-            if (lastMD5Update != null) {
-                console.log("Time since last change: " + ((new Date()) - lastMD5Update));
+            if (savedSettings.lastMD5Update != null) {
+                console.log("Time since last change: " + ((new Date()) - savedSettings.lastMD5Update));
                 // how long since it changed?  are we not getting updates?
-                if (!sent24hrMessage && ((new Date()) - lastMD5Update) > 24*60*60*1000) {
-                    sent24hrMessage = true;
+                if (!savedSettings.sent24hrMessage && ((new Date()) - savedSettings.lastMD5Update) > 24*60*60*1000) {
+                    savedSettings.sent24hrMessage = true;
                     sendMessage("No updates for more than 24h");
+                    saveSettings();
                 }
             }
             return;
         }
 
-        // remember the MD5
-        sent24hrMessage=false;
-        lastMD5=hash;
-        lastMD5Update=new Date();
+        // remember the MD5 and if we have sent our message
+        savedSettings.sent24hrMessage=false;
+        savedSettings.lastMD5=hash;
+        savedSettings.lastMD5Update=new Date();
+        saveSettings();
 
-        for (name in matching) {
-            if (body.match(new RegExp(matching[name], "i"))) {
-                sendMessage("Found a match for " + matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com")
+        for (name in savedSettings.matching) {
+            if (body.match(new RegExp("\\b" + savedSettings.matching[name] + "\\b", "i"))) {
+                sendMessage("Found a match for " + savedSettings.matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com")
                     .then(function(data)
                     {
                         console.log("We got some data");
@@ -229,42 +236,48 @@ if (process.argv.length > 2) {
     }
 }
 
+// load settings from redis
 // is the redis server in a default state?  if so, init with defaults
-getAsync('matching').then((res) => {
-    console.log('matching: ' + res);
+getAsync('watch-lb-settings').then((res) => {
     if (!res) {
         // initialize matching
         console.log("Initializing from defaults");
-        matching = matching_default;
-        client.set("matching", JSON.stringify(matching));
+        saveSettings();
     } else {
-        matching = JSON.parse(res);
-        // make sure matching_default is the minimum
-        for (m in matching_default)  {  
-            if (matching_default.indexOf(m) < 0)
-                matching.push(m);
+        var loaded = JSON.parse(res);
+        // merge with our settings
+        for (setting in savedSettings) {
+            if (typeof loaded[setting] != 'undefined') {
+                // TODO: treat 'matching' as its own merge?
+                // upside: adding new defaults go in on reboot
+                // downside: removing and rebooting brings it back
+                // maybe better: /list default command to reset redis
+                savedSettings[setting] = loaded[setting];
+            }
         }
+        // manually upconvert known Dates
+        savedSettings.lastMD5Update = (savedSettings.lastMD5Update == null) ? null : new Date(savedSettings.lastMD5Update);
+        savedSettings.lastIntervalUpdate = (savedSettings.lastIntervalUpdate == null) ? null : new Date(savedSettings.lastIntervalUpdate);
     }
-})
 
-// just do a test run?
-if (!runOnce) {  
-    getAsync('defaultRate').then((res) => {
-	console.log("defaultRate is " + res);
-        defaultRate = (res) ? res : (process.env.CHECK_RATE || 15);
-        intervalTimer = setInterval(checkWines, 1000*60*defaultRate);
-    });
-}
+    // now we have master settings, continue with booting
 
-// TODO: store other things in redis
+    // just do a test run?
+    if (!runOnce) {  
+        console.log("defaultRate is " + savedSettings.defaultRate);
+        if (!savedSettings.defaultRate) {
+            savedSettings.defaultRate = (process.env.CHECK_RATE || 15);
+            saveSettings();
+        }
+        runtimeSettings.intervalTimer = setInterval(checkWines, 1000*60*savedSettings.defaultRate);
+    }
 
-// does it look like the system just started?
-if (os.uptime() < 5*60) {
-    sendMessage("Looks like the system just restarted, uptime is " + os.uptime());
-    // just in case, run an initial check
+    // does it look like the system just started?
+    if (os.uptime() < 5*60) {
+        sendMessage("Looks like the system just restarted, uptime is " + os.uptime());
+    }
+
+    // just in case, run an initial check.  with all of the caching we're doing, 
+    // we should not be over-communicating
     checkWines();
-}
-
-
-
-
+});
