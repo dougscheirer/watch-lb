@@ -1,0 +1,14 @@
+version: "3"
+services:
+  redis:
+    image: redis
+    container_name: watch-lb-redis
+    restart: always
+    entrypoint: redis-server
+    command: ["--appendonly", "yes"]
+  watch-lb:
+    restart: always
+    container_name: watch-lb
+    image: "dscheirer/watch-lb"
+    env_file:
+      - .env

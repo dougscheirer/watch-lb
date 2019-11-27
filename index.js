@@ -1,14 +1,21 @@
 // .env reader
 require('dotenv').config()
-
 const curl = new (require( 'curl-request' ))();
 const parser = require('node-html-parser');
 const telegram = require('node-telegram-bot-api');
 const crypto = require('crypto');
 const os = require('os');
 const mjs = require('moment');
+var redis = require("redis");
+const {promisify} = require('util');
 
-const api = new telegram(process.env.API_TOKEN, {polling: true} );
+// determine redis host from environment and connect
+const opts = { host: process.env.REDIS_HOST || "localhost" };
+const client = redis.createClient(opts);
+const getAsync = promisify(client.get).bind(client);
+
+// connect to telegram
+const api = (process.env.NO_TELEGRAM != 1) ? new telegram(process.env.API_TOKEN, {polling: true} ) : null;
 
 var intervalTimer = null;
 var lastMD5 = null;
@@ -16,15 +23,6 @@ var lastMD5Update = null;
 var lastIntervalUpdate = null;
 var defaultRate = null;
 var sent24hrMessage = false;
-
-var matching = [ "bordeaux", "mounts", "trespass", "cabernet", "franc", "rioja", "syrah", "emilion", "les ormes", "petit" ];
-
-// /start
-api.onText(/\/start/, (msg, match) => {
-    const chatId = msg.chat.id;
-  
-    sendMessage("Your chat id is " + chatId);
-  });
 
 // /status
 api.onText(/\/status/, (msg, match) => {
@@ -39,70 +37,115 @@ api.onText(/\/status/, (msg, match) => {
   });
 
 
+const matching_default = [
+    "bordeaux", 
+    "mounts", 
+    "trespass", 
+    "cabernet", 
+    "franc", 
+    "rioja", 
+    "syrah", 
+    "emilion", 
+    "les ormes", 
+    "petit"];
+var matching = null;
+
 function sendList() {
     sendMessage("Current search terms:\n" + matching.join("\n"));
 }
 
-// /list
-api.onText(/\/list/, (msg, match) => {
-    sendList();
-});
+if (api) {
+    // /start
+    api.onText(/\/start/, (msg) => {
+        const chatId = msg.chat.id;
+    
+        sendMessage("Your chat id is " + chatId);
+    });
 
-// /add (term)
-api.onText(/\/add (.+)/, (msg, match) => {
-    const toAdd = match[1].toLowerCase();
-    if (matching.indexOf(toAdd) >= 0 ) {
-        sendMessage(toAdd + " is already a search term");
-        return;
-    }
-    matching.push(toAdd);
-    sendList();
-    // invalidate the MD5 cache
-    lastMD5 = null;
-    lastMD5Update = null;
-    checkWines(true);
-});
+    // /list
+    api.onText(/\/list/, (msg) => {
+        sendList();
+    });
+    
+        // /status
+    api.onText(/\/status/, (msg) => {
+        const duration = mjs.duration(lastIntervalUpdate - lastMD5Update);
+        if (lastMD5Update == null) {
+            sendMessage("Never checked");
+            return;
+        }
+        sendMessage("Last check at " + lastIntervalUpdate + "\nLast difference at " + lastMD5Update + " (" + duration.humanize() + ")");
+        console.log(msg);
+        console.log(msg.chat);
+    });
 
-// /remove (term)
-api.onText(/\/del (.+)/, (msg, match) => {
-    const toDel = match[1].toLowerCase();
-    if (matching.indexOf(toDel) < 0 ) {
-        sendMessage(toDel + " is not a search term");
-        return;
-    }
-    matching.splice(matching.indexOf(toDel));
-    sendList();
-    // invalidate the MD5 cache
-    lastMD5 = null;
-    lastMD5Update = null;
-    checkWines(true);
-});
+    // /list
+    api.onText(/\/list/, (msg) => {
+        sendMessage("Current search terms:\n" + matching.join("\n"));
+    });
 
-// /now
-api.onText(/\/now/, (msg, match) => {
-    checkWines(true);
-});
+    // /add (term)
+    api.onText(/\/add (.+)/, (msg) => {
+        const toAdd = match[1].toLowerCase();
+        if (matching.indexOf(toAdd) >= 0 ) {
+            sendMessage(toAdd + " is already a search term");
+            return;
+        }
+        matching.push(toAdd);
+        sendList();
+        // write to redis
+        client.set("matching", JSON.stringify(matching));
+        // invalidate the MD5 cache
+        lastMD5 = null;
+        lastMD5Update = null;
+        checkWines(true);
+    });
 
-// /uptick (time | default)"
-api.onText(/\/uptick (.+)/, (msg, match) => {
-    var number = null;
-    if (match[1] == "default") {
-        number = defaultRate;
-    } else {
-        number = parseInt(match[1]);
-    }
+    // /del (term)
+    api.onText(/\/del (.+)/, (msg, match) => {
+        const toDel = match[1].toLowerCase();
+        if (matching.indexOf(toDel) < 0 ) {
+            sendMessage(toDel + " is not a search term");
+            return;
+        }
+        matching.splice(toDel, 1);
+        sendList();
+        // write to redis
+        client.set("matching", JSON.stringify(matching));
+        // invalidate the MD5 cache
+        lastMD5 = null;
+        lastMD5Update = null;
+        checkWines(true);
+    });
+    
+    // /now
+    api.onText(/\/now/, (msg) => {
+        checkWines(true);
+    });
 
-    if (!number) {
-        sendMessage(match[1] + " is not a number.  Specify a number of minutes to change the check interval");
-        return;
-    }
-  
-    // increase the frequency of checks to (match) minutes
-    clearInterval(intervalTimer);
-    checkWines();
-    intervalTimer = setInterval(checkWines, number*1000*60);
-    sendMessage("Check interval changed to " + number + " minutes");
-});
+    // /uptick (time | default)"
+    api.onText(/\/uptick (.+)/, (msg, match) => {
+        var number = null;
+        if (match[1] == "default") {
+            number = defaultRate;
+        } else {
+            number = parseInt(match[1]);
+        }
+
+        if (!number) {
+            sendMessage(match[1] + " is not a number.  Specify a number of minutes to change the check interval");
+            return;
+        }
+    
+        // increase the frequency of checks to (match) minutes
+        clearInterval(intervalTimer);
+        checkWines();
+        intervalTimer = setInterval(checkWines, number*1000*60);
+        // save the last setting
+        client.set('defaultRate', number);
+        sendMessage("Check interval changed to " + number + " minutes");
+    });
+}
 
 function logError(message) {
     console.log("ERROR >>>");   
@@ -112,7 +155,7 @@ function logError(message) {
 
 function sendMessage(message) {
     console.log("Sending message: " + message);
-    return api.sendMessage(process.env.CHAT_ID, message);
+    return (api) ? api.sendMessage(process.env.CHAT_ID, message) : console.log("No API, just logging");
 }
 
 function checkWines(reportNothing) {
@@ -186,18 +229,42 @@ if (process.argv.length > 2) {
     }
 }
 
-// does it look like the system just started?
+// is the redis server in a default state?  if so, init with defaults
+getAsync('matching').then((res) => {
+    console.log('matching: ' + res);
+    if (!res) {
+        // initialize matching
+        console.log("Initializing from defaults");
+        matching = matching_default;
+        client.set("matching", JSON.stringify(matching));
+    } else {
+        matching = JSON.parse(res);
+        // make sure matching_default is the minimum
+        for (m in matching_default)  {  
+            if (matching_default.indexOf(m) < 0)
+                matching.push(m);
+        }
+    }
+})
 
+// just do a test run?
+if (!runOnce) {  
+    getAsync('defaultRate').then((res) => {
+	console.log("defaultRate is " + res);
+        defaultRate = (res) ? res : (process.env.CHECK_RATE || 15);
+        intervalTimer = setInterval(checkWines, 1000*60*defaultRate);
+    });
+}
+
+// TODO: store other things in redis
+
+// does it look like the system just started?
 if (os.uptime() < 5*60) {
     sendMessage("Looks like the system just restarted, uptime is " + os.uptime());
     // just in case, run an initial check
     checkWines();
 }
 
-if (!runOnce) {  // env CHECK_RATE in minutes or 15
-    defaultRate = process.env.CHECK_RATE || 15;
-    intervalTimer = setInterval(checkWines, 1000*60*defaultRate);
-}
 
 
 
