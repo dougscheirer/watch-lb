@@ -9,9 +9,11 @@ die()
 mkdir -p /etc/docker/compose || die "Failed to create compose directory"
 
 # always put a new script file in place
-# TODO: $(which docker-compose) + sed to change systemd-script to real bin location on install
-# sed '/s/DCOMPLOC/' ./systemd-script /etc/systemd/system/docker-compose@.service
-cp ./systemd-script /etc/systemd/system/docker-compose@.service || die "Failed to copy service config"
+# $(which docker-compose) + sed to change systemd-script to real bin location on install
+DCOMPLOC=$(which docker-compose)
+# make the start script
+sed "s/DCOMP/${DCOMPLOC//\//\\/}/g" ./systemd-script > /etc/systemd/system/docker-compose@.service
+# cp ./systemd-script /etc/systemd/system/docker-compose@.service || die "Failed to copy service config"
 # load new script
 systemctl daemon-reload || die "Failed to reload systemctl"
 
