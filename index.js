@@ -21,7 +21,7 @@ var runtimeSettings = {
     intervalTimer: null,
 }
 
-var currentDefault = null;
+const DEFAULT_RATE = 15;
 
 // only do whole word matching
 const matching_default = [
@@ -131,7 +131,7 @@ if (api) {
     api.onText(/\/uptick (.+)/, (msg, match) => {
         var number = null;
         if (match[1] == "default") {
-            number = savedSettings.defaultRate;
+            number = DEFAULT_RATE;
         } else {
             number = parseInt(match[1]);
         }
@@ -266,7 +266,7 @@ getAsync('watch-lb-settings').then((res) => {
     if (!runOnce) {  
         console.log("defaultRate is " + savedSettings.defaultRate);
         if (!savedSettings.defaultRate) {
-            savedSettings.defaultRate = (process.env.CHECK_RATE || 15);
+            savedSettings.defaultRate = process.env.CHECK_RATE || DEFAULT_RATE;
             saveSettings();
         }
         runtimeSettings.intervalTimer = setInterval(checkWines, 1000*60*savedSettings.defaultRate);
