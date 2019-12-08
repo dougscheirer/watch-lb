@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "nodeunit test/unittest.js"
   },
   "author": "",
   "license": "ISC",
@@ -15,6 +15,10 @@
     "moment": "^2.24.0",
     "node-html-parser": "^1.1.16",
     "node-telegram-bot-api": "^0.40.0",
+    "parse-duration": "^0.1.2",
     "redis": "^2.8.0"
+  },
+  "devDependencies": {
+    "nodeunit": "^0.11.3"
   }
 }
