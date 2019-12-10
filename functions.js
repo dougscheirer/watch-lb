@@ -84,7 +84,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
         msgResp = "Last check at " + this.savedSettings.lastIntervalUpdate + "\n";
         msgResp += "Last difference at " + this.savedSettings.lastMD5Update + " (" + duration.humanize() + ")\n";
       }
-      msgResp += "Current interval: " + mjs.duration(this.savedSettings.defaultRate);
+      msgResp += "Current interval: " + mjs.duration(this.savedSettings.defaultRate * 1000 * 60).humanize();
       this.sendMessage(msgResp);
       this.logger(msg);
       this.logger(msg.chat);
@@ -108,13 +108,13 @@ function watchRuntime(telegramApi, redisApi, chatid) {
     },
 
     // /del (term)
-    this.handleDelelte = (msg, match) => {
+    this.handleDelete = (msg, match) => {
       const toDel = match[1].toLowerCase();
       if (this.savedSettings.matching.indexOf(toDel) < 0) {
         this.sendMessage(toDel + " is not a search term");
         return;
       }
-      this.savedSettings.matching.splice(toDel, 1);
+      this.savedSettings.matching = this.savedSettings.matching.splice(toDel, 1);
       this.sendList();
       // write to redis
       this.saveSettings();
@@ -153,13 +153,13 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       }
 
       // change the frequency of checks to (match) minutes
-      clearInterval(runtimeSettings.intervalTimer);
+      clearInterval(this.runtimeSettings.intervalTimer);
       this.checkWines();
-      this.runtimeSettings.intervalTimer = setInterval(checkWines, number * 1000 * 60);
+      this.runtimeSettings.intervalTimer = setInterval(this.checkWines, number * 1000 * 60);
       // save the last setting
       this.savedSettings.defaultRate = number;
       this.saveSettings();
-      this.sendMessage("Check interval changed to " + number + " minutes");
+      this.sendMessage("Check interval changed to " + mjs.duration(number * 1000 * 60).humanize());
     },
 
     this.logError = (message) => {
