@@ -22,36 +22,19 @@ const matching_default = [
   "les ormes",
   "petit"];
 
-function watchRuntime(telegramApi, redisApi) {
-  if (telegramApi) {
-    // /start
-    telegramApi.onText(/\/start$/, this.handleStart);
+function watchRuntime(telegramApi, redisApi, chatid) {
+  if (!telegramApi)
+    throw new Error("telegramApi is required");
+  if (!redisApi)
+     throw new Error("redis client is required");
+  if (!chatid) 
+    chatid = process.env.CHAT_ID;
+
   
-    // /list
-    telegramApi.onText(/\/list$/, this.handleList);
-  
-    // /list default
-    telegramApi.onText(/\/list default$/, this.handleListDefault);
-  
-    // /status
-    telegramApi.onText(/\/status$/, this.handleStatus);
-  
-    // /add (term)
-    telegramApi.onText(/\/add (.+)/, this.handleAdd);
-  
-    // /del (term)
-    telegramApi.onText(/\/del (.+)/, this.handleDelete);
-  
-    // /now
-    telegramApi.onText(/\/now$/, this.handleNow);
-  
-    // /uptick (human-readable time | default)"
-    telegramApi.onText(/\/uptick (.+)/, this.handleUptick);
-  }
-  
-  this.api = telegramApi,
+  this.telegramApi = telegramApi,
     this.client = redisApi,
-    this.getAsync = promisify(client.get).bind(client),
+    this.chatid = chatid,
+    this.getAsync = promisify(this.client.get).bind(this.client),
 
     this.runtimeSettings = {
       intervalTimer: null,
@@ -67,7 +50,7 @@ function watchRuntime(telegramApi, redisApi) {
     },
 
     this.saveSettings = () => {
-      this.client.set('watch-lb-settings', JSON.stringify(savedSettings));
+      this.client.set('watch-lb-settings', JSON.stringify(this.savedSettings));
     },
 
     this.sendList = () => {
@@ -95,14 +78,14 @@ function watchRuntime(telegramApi, redisApi) {
 
     // /status
     this.handleStatus = (msg) => {
-      const duration = mjs.duration(savedSettings.lastIntervalUpdate - savedSettings.lastMD5Update);
+      const duration = mjs.duration(this.savedSettings.lastIntervalUpdate - this.savedSettings.lastMD5Update);
       var msgResp = "Never checked";
       if (this.savedSettings.lastMD5Update != null) {
         msgResp = "Last check at " + this.savedSettings.lastIntervalUpdate + "\n";
         msgResp += "Last difference at " + this.savedSettings.lastMD5Update + " (" + duration.humanize() + ")\n";
       }
       msgResp += "Current interval: " + mjs.duration(this.savedSettings.defaultRate);
-      sendMessage(msgResp);
+      this.sendMessage(msgResp);
       console.log(msg);
       console.log(msg.chat);
     },
@@ -174,7 +157,7 @@ function watchRuntime(telegramApi, redisApi) {
       this.checkWines();
       this.runtimeSettings.intervalTimer = setInterval(checkWines, number * 1000 * 60);
       // save the last setting
-      savedSettings.defaultRate = number;
+      this.savedSettings.defaultRate = number;
       this.saveSettings();
       this.sendMessage("Check interval changed to " + number + " minutes");
     },
@@ -186,16 +169,22 @@ function watchRuntime(telegramApi, redisApi) {
     },
 
     this.sendMessage = (message) => {
-      console.log("Sending message: " + message);
-      return (api) ? api.sendMessage(process.env.CHAT_ID, message) : console.log("No API, just logging");
+      console.log("Sending message to " + this.chatid + " : " + message);
+      return telegramApi.sendMessage(this.chatid, message);
+    },
+
+    // allow for fetchUrl to be overridden in test mode
+    this.fetchUrl = (url) => {
+      return curl.get(url);
     },
 
     this.checkWines = (reportNothing) => {
       this.savedSettings.lastIntervalUpdate = new Date();
-      curl.get("https://lastbottlewines.com")
+      // TODO: this should be mocked
+      this.fetchUrl("https://lastbottlewines.com")
         .then(({ statusCode, body, headers }) => {
           if (statusCode != 200) {
-            logError(err);
+            this.logError("Fetch error: " + statusCode);
             return;
           }
 
@@ -204,16 +193,16 @@ function watchRuntime(telegramApi, redisApi) {
           // TODO: catch parse errors
           const offerName = root.querySelector(".offer-name");
           if (!offerName) {
-            logError("offer-name class not found, perhaps the page formatting has changed");
+            this.logError("offer-name class not found, perhaps the page formatting has changed");
             return;
           }
 
-          // TODO: write hash to a local FS to tell when page has changed?
+          // write hash to a local FS to tell when page has changed?
           const hash = crypto.createHash('md5').update(body).digest("hex");
           if (!reportNothing && hash == this.savedSettings.lastMD5) {
             console.log("No changes since last update");
             if (this.savedSettings.lastMD5Update != null) {
-              console.log("Time since last change: " + ((new Date()) - savedSettings.lastMD5Update));
+              console.log("Time since last change: " + ((new Date()) - this.savedSettings.lastMD5Update));
               // how long since it changed?  are we not getting updates?
               if (!this.savedSettings.sent24hrMessage && ((new Date()) - this.savedSettings.lastMD5Update) > 24 * 60 * 60 * 1000) {
                 this.savedSettings.sent24hrMessage = true;
@@ -238,7 +227,7 @@ function watchRuntime(telegramApi, redisApi) {
                   console.log(data);
                 })
                 .catch(function (err) {
-                  logError(err);
+                  this.logError(err);
                 });
               return;
             }
@@ -250,7 +239,61 @@ function watchRuntime(telegramApi, redisApi) {
         .catch((e) => {
           console.log(e);
         });
-      };
+    },
+
+    this.loadSettings = async (start) => {
+      return this.getAsync('watch-lb-settings').then((res) => {
+        if (!res) {
+          // initialize matching
+          console.log("Initializing from defaults");
+          this.saveSettings();
+        } else {
+          var loaded = JSON.parse(res);
+          // merge with our settings
+          for (setting in this.savedSettings) {
+            if (typeof loaded[setting] != 'undefined') {
+              // TODO: treat 'matching' as its own merge?
+              // upside: adding new defaults go in on reboot
+              // downside: removing and rebooting brings it back
+              // maybe better: /list default command to reset redis
+              this.savedSettings[setting] = loaded[setting];
+            }
+          }
+          // manually upconvert known Dates
+          this.savedSettings.lastMD5Update = (this.savedSettings.lastMD5Update == null) ? null : new Date(this.savedSettings.lastMD5Update);
+          this.savedSettings.lastIntervalUpdate = (this.savedSettings.lastIntervalUpdate == null) ? null : new Date(this.savedSettings.lastIntervalUpdate);
+        }
+
+
+        // now we have master settings, continue with booting
+        if (!this.savedSettings.defaultRate) {
+          this.savedSettings.defaultRate = process.env.CHECK_RATE || DEFAULT_RATE;
+          this.saveSettings();
+        }
+        if (start == undefined || !!start) {
+          this.runtimeSettings.intervalTimer = setInterval(this.checkWines, 1000 * 60 * this.savedSettings.defaultRate);
+        }
+      });
+    };
+
+  // load up all of the text processors
+
+  // /start
+  telegramApi.onText(/\/start$/, this.handleStart);
+  // /list
+  telegramApi.onText(/\/list$/, this.handleList);
+  // /list default
+  telegramApi.onText(/\/list default$/, this.handleListDefault);
+  // /status
+  telegramApi.onText(/\/status$/, this.handleStatus);
+  // /add (term)
+  telegramApi.onText(/\/add (.+)/, this.handleAdd);
+  // /del (term)
+  telegramApi.onText(/\/del (.+)/, this.handleDelete);
+  // /now
+  telegramApi.onText(/\/now$/, this.handleNow);
+  // /uptick (human-readable time | default)"
+  telegramApi.onText(/\/uptick (.+)/, this.handleUptick);
 };
 
 exports.watchRuntime = watchRuntime;
