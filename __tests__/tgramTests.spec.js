@@ -1,6 +1,6 @@
 const { watchRuntime } = require('../functions');
 const redis = require("redis-mock");
-
+const fs = require('fs');
 const tgramMock = require('../__mocks__/tgramMock');
 
 var sendMessages = [];
@@ -26,8 +26,13 @@ function loadWatcher(fetchFunc) {
 
 function loadGoodTest() {
   return loadWatcher(async (url) => {
-    // TODO: add good content here
-    return { statusCode: 200, body: "this is pizza", headers: [{ result: "pie" }] };
+    var body;
+    try {
+      body = fs.readFileSync("./testdata/good.html").toString();
+    } catch (e) { 
+      console.log("error:" + e); 
+    }
+    return { statusCode: 200, body: body, headers: [{ result: "pie" }] };
   });
 }
 
@@ -59,10 +64,11 @@ test('sendMessage', (done) => {
 
 test('/now positive result', (done) => {
   return loadGoodTest().then(() => {
-    api.testTextReceived('/now');
-    expect(sendMessages.length).toEqual(1);
-    expect(sendMessages[0].message).toEqual("Found a match for ...");
-    done();
+    api.testTextReceived('/now').then((res) => {
+      expect(sendMessages.length).toEqual(1);
+      expect(sendMessages[0].message).toEqual("Found a match for cabernet in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com");
+      done();
+    });
   })
 });
 
@@ -88,7 +94,8 @@ test('/status', (done) => {
   return loadGoodTest().then(() => {
     api.testTextReceived('/status');
     expect(sendMessages.length).toEqual(1);
-    expect(sendMessages[0].message).toEqual("Never checked\nCurrent interval: 15");
+    const regex=/Last check at (.*)\nLast difference at (.*)/
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
     done();
   })
 });
