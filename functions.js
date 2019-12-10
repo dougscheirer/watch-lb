@@ -29,12 +29,12 @@ function watchRuntime(telegramApi, redisApi, chatid) {
      throw new Error("redis client is required");
   if (!chatid) 
     chatid = process.env.CHAT_ID;
-
   
   this.telegramApi = telegramApi,
     this.client = redisApi,
     this.chatid = chatid,
     this.getAsync = promisify(this.client.get).bind(this.client),
+    this.logger = console.log,
 
     this.runtimeSettings = {
       intervalTimer: null,
@@ -72,22 +72,22 @@ function watchRuntime(telegramApi, redisApi, chatid) {
     this.handleListDefault = (msg) => {
       this.savedSettings.matching = matching_default;
       this.saveSettings();
-      console.log("Restored default list");
+      this.logger("Restored default list");
       this.sendList();
     },
 
     // /status
     this.handleStatus = (msg) => {
       const duration = mjs.duration(this.savedSettings.lastIntervalUpdate - this.savedSettings.lastMD5Update);
-      var msgResp = "Never checked";
+      var msgResp = "Never checked\n";
       if (this.savedSettings.lastMD5Update != null) {
         msgResp = "Last check at " + this.savedSettings.lastIntervalUpdate + "\n";
         msgResp += "Last difference at " + this.savedSettings.lastMD5Update + " (" + duration.humanize() + ")\n";
       }
       msgResp += "Current interval: " + mjs.duration(this.savedSettings.defaultRate);
       this.sendMessage(msgResp);
-      console.log(msg);
-      console.log(msg.chat);
+      this.logger(msg);
+      this.logger(msg.chat);
     },
 
     // /add (term)
@@ -163,13 +163,13 @@ function watchRuntime(telegramApi, redisApi, chatid) {
     },
 
     this.logError = (message) => {
-      console.log("ERROR >>>");
-      console.log(message);
+      this.logger("ERROR >>>");
+      this.logger(message);
       this.sendMessage(message);
     },
 
     this.sendMessage = (message) => {
-      console.log("Sending message to " + this.chatid + " : " + message);
+      this.logger("Sending message to " + this.chatid + " : " + message);
       return telegramApi.sendMessage(this.chatid, message);
     },
 
@@ -200,9 +200,9 @@ function watchRuntime(telegramApi, redisApi, chatid) {
           // write hash to a local FS to tell when page has changed?
           const hash = crypto.createHash('md5').update(body).digest("hex");
           if (!reportNothing && hash == this.savedSettings.lastMD5) {
-            console.log("No changes since last update");
+            this.logger("No changes since last update");
             if (this.savedSettings.lastMD5Update != null) {
-              console.log("Time since last change: " + ((new Date()) - this.savedSettings.lastMD5Update));
+              this.logger("Time since last change: " + ((new Date()) - this.savedSettings.lastMD5Update));
               // how long since it changed?  are we not getting updates?
               if (!this.savedSettings.sent24hrMessage && ((new Date()) - this.savedSettings.lastMD5Update) > 24 * 60 * 60 * 1000) {
                 this.savedSettings.sent24hrMessage = true;
@@ -223,8 +223,8 @@ function watchRuntime(telegramApi, redisApi, chatid) {
             if (body.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
               this.sendMessage("Found a match for " + this.savedSettings.matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com")
                 .then(function (data) {
-                  console.log("We got some data");
-                  console.log(data);
+                  this.logger("We got some data");
+                  this.logger(data);
                 })
                 .catch(function (err) {
                   this.logError(err);
@@ -234,10 +234,10 @@ function watchRuntime(telegramApi, redisApi, chatid) {
           }
           if (!!reportNothing)
             this.sendMessage("No matching terms in '" + offerName.rawText + "'");
-          console.log("No matching terms for '" + offerName.rawText + "'");
+            this.logger("No matching terms for '" + offerName.rawText + "'");
         })
         .catch((e) => {
-          console.log(e);
+          this.logger(e);
         });
     },
 
@@ -245,7 +245,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       return this.getAsync('watch-lb-settings').then((res) => {
         if (!res) {
           // initialize matching
-          console.log("Initializing from defaults");
+          this.logger("Initializing from defaults");
           this.saveSettings();
         } else {
           var loaded = JSON.parse(res);
