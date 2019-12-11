@@ -1,4 +1,4 @@
-const { watchRuntime } = require('../functions');
+const { watchRuntime } = require('../watchRuntime');
 const redis = require("redis-mock");
 const fs = require('fs');
 const tgramMock = require('../__mocks__/tgramMock');
@@ -225,4 +225,51 @@ test('/del pizza', (done) => {
     expect(sendMessages.length).toEqual(1);
     done();
   })
+});
+
+test('/pause', (done) => {
+  return loadGoodTest().then(async () => {
+    await api.testTextReceived('/pause');
+    const regex=/Pausing until forever/
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // make sure it will not check
+    sendMessages=[];
+    watcher.checkWines(true);
+    const regex2=/Paused, use \/resume to restart/
+    expect(regex2.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // resume
+    sendMessages=[];
+    api.testTextReceived('/resume');
+    const regex3=/Resuming with check interval of/
+    expect(regex3.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
+test('/pause 2 weeks', (done) => {
+  return loadGoodTest().then(async () => {
+    await api.testTextReceived('/pause 2 weeks');
+    const regex=/Pausing until/
+    console.log(sendMessages);
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // make sure it will not check
+    sendMessages=[];
+    watcher.checkWines(true);
+    const regex2=/Paused, will resume on/
+    console.log(sendMessages);
+    expect(regex2.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // resume
+    sendMessages=[];
+    api.testTextReceived('/resume');
+    const regex3=/Resuming with check interval of/
+    console.log(sendMessages);
+    expect(regex3.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    done();
+  });
 });

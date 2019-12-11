@@ -9,7 +9,7 @@ const mjs = require('moment');
 const redis = require("redis");
 const { promisify } = require('util');
 const durationParser = require('parse-duration');
-const { watchRuntime } = require('./functions');
+const { watchRuntime } = require('./watchRuntime');
 
 // determine redis host from environment and connect
 const opts = { host: process.env.REDIS_HOST || "localhost", port: process.env.REDIS_PORT || 6379 };

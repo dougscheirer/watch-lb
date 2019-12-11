@@ -46,7 +46,8 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       lastIntervalUpdate: null,
       sent24hrMessage: false,
       matching: matching_default.slice(),
-      defaultRate: null
+      defaultRate: null,
+      pauseUntil: -1
     },
 
     this.saveSettings = () => {
@@ -162,6 +163,35 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       this.sendMessage("Check interval changed to " + mjs.duration(number * 1000 * 60).humanize());
     },
 
+    this.handlePause = (msg, match) => {
+      var until = 0;
+      if (match.length == 1) {
+        // just pause, no end time
+      } else {
+        // if only numbers, then assume it's in minutes
+        const reg = /^\d+$/;
+        if (reg.test(match[1])) {
+          until = parseInt(match[1]) * 60 * 1000;
+        } else {
+          // try to parse a duration string (comes out in ms) and convert to minutes
+          until = durationParser(match[1]);
+        }
+      }
+      // write the until time as 0 (forever) or a datestamp
+      if (until > 0) {
+        until = new Date((new Date()).getTime() + until);
+      }
+      this.savedSettings.pauseUntil = until;
+      this.saveSettings();
+      this.sendMessage("Pausing until " + ((until > 0) ? until : "forever"));
+    },
+
+    this.handleResume = (msg) => {
+      this.savedSettings.pauseUntil = -1;
+      this.saveSettings();
+      this.sendMessage("Resuming with check interval of " + mjs.duration(this.savedSettings.defaultRate * 1000 * 60).humanize());
+    },
+
     this.logError = async (message) => {
       this.logger("ERROR >>>");
       this.logger(message);
@@ -180,7 +210,22 @@ function watchRuntime(telegramApi, redisApi, chatid) {
 
     this.checkWines = (reportNothing) => {
       this.savedSettings.lastIntervalUpdate = new Date();
-      // TODO: this should be mocked
+      if (this.savedSettings.pauseUntil == 0) {
+        if (reportNothing) {
+          this.sendMessage("Paused, use /resume to restart");
+        }
+        return; // we're paused
+      } else if (this.savedSettings.pauseUntil != -1) {
+        if (this.savedSettings.lastIntervalUpdate > this.savedSettings.pauseUntil) {
+          this.savedSettings.pauseUntil = -1;
+          this.saveSettings();
+        } else {
+          if (reportNothing) {
+            this.sendMessage("Paused, will resume on " + this.savedSettings.pauseUntil);
+          }
+          return; // we're paused
+        }
+      }
       this.fetchUrl("https://lastbottlewines.com")
         .then(({ statusCode, body, headers }) => {
           if (statusCode != 200) {
@@ -222,7 +267,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
           for (name in this.savedSettings.matching) {
             if (body.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
               const that = this;
-	      this.sendMessage("Found a match for " + this.savedSettings.matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com")
+	            this.sendMessage("Found a match for " + this.savedSettings.matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com")
                 .then(function (data) {
                   that.logger("We got some data");
                   that.logger(data);
@@ -295,6 +340,11 @@ function watchRuntime(telegramApi, redisApi, chatid) {
   telegramApi.onText(/\/now$/, this.handleNow);
   // /uptick (human-readable time | default)"
   telegramApi.onText(/\/uptick (.+)/, this.handleUptick);
+  // /pause [human-readable time]
+  telegramApi.onText(/\/pause$/, this.handlePause);
+  telegramApi.onText(/\/pause (.+)/, this.handlePause);
+  // /resume
+  telegramApi.onText(/\/resume$/, this.handleResume);
 };
 
 exports.watchRuntime = watchRuntime;
