@@ -221,13 +221,14 @@ function watchRuntime(telegramApi, redisApi, chatid) {
 
           for (name in this.savedSettings.matching) {
             if (body.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
-              this.sendMessage("Found a match for " + this.savedSettings.matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com")
+              const that = this;
+	      this.sendMessage("Found a match for " + this.savedSettings.matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com")
                 .then(function (data) {
-                  this.logger("We got some data");
-                  this.logger(data);
+                  that.logger("We got some data");
+                  that.logger(data);
                 })
                 .catch(function (err) {
-                  this.logError(err);
+                  that.logError(err);
                 });
               return;
             }
