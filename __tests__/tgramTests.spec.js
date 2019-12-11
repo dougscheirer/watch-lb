@@ -131,6 +131,7 @@ test('/list default', (done) => {
     sendMessages = [];
     await api.testTextReceived('/list default');
     expect(regex.test(sendMessages[0].message)).toBeFalsy();
+    watcher.logger = logCapture;
     done();
   })
 });

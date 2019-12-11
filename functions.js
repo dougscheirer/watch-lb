@@ -45,7 +45,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       lastMD5Update: null,
       lastIntervalUpdate: null,
       sent24hrMessage: false,
-      matching: matching_default,
+      matching: matching_default.slice(),
       defaultRate: null
     },
 
@@ -70,7 +70,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
 
     // /list default
     this.handleListDefault = (msg) => {
-      this.savedSettings.matching = matching_default;
+      this.savedSettings.matching = matching_default.slice();
       this.saveSettings();
       this.logger("Restored default list");
       this.sendList();
@@ -162,13 +162,13 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       this.sendMessage("Check interval changed to " + mjs.duration(number * 1000 * 60).humanize());
     },
 
-    this.logError = (message) => {
+    this.logError = async (message) => {
       this.logger("ERROR >>>");
       this.logger(message);
-      this.sendMessage(message);
+      await this.sendMessage(message);
     },
 
-    this.sendMessage = (message) => {
+    this.sendMessage = async (message) => {
       this.logger("Sending message to " + this.chatid + " : " + message);
       return telegramApi.sendMessage(this.chatid, message);
     },
