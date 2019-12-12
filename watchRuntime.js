@@ -86,6 +86,13 @@ function watchRuntime(telegramApi, redisApi, chatid) {
         msgResp += "Last difference at " + this.savedSettings.lastMD5Update + " (" + duration.humanize() + ")\n";
       }
       msgResp += "Current interval: " + mjs.duration(this.savedSettings.defaultRate * 1000 * 60).humanize();
+      try {
+        if (this.savedSettings.pauseUntil != -1) {
+         msgResp += "\nPaused until " + ((this.savedSettings.pauseUntil > 0) ? this.savedSettings.pauseUntil : "forever");
+       }
+      } catch (e) {
+        this.logger(e);
+      }
       this.sendMessage(msgResp);
       this.logger(msg);
       this.logger(msg.chat);
@@ -345,6 +352,19 @@ function watchRuntime(telegramApi, redisApi, chatid) {
   telegramApi.onText(/\/pause (.+)/, this.handlePause);
   // /resume
   telegramApi.onText(/\/resume$/, this.handleResume);
+  telegramApi.onText(/\/help$/, () => {
+    this.sendMessage("Commands:\n"
+    + "/start\n"
+    + "/list [default]\n"
+    + "/status\n"
+    + "/add (term)\n"
+    + "/del (term)\n"
+    + "/now\n"
+    + "/uptick (duration | default\n"
+    + "/pause [duration]\n"
+    + "/resume\n"
+    + "/help");
+  })
 };
 
 exports.watchRuntime = watchRuntime;

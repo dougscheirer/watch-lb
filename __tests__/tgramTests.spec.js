@@ -14,6 +14,8 @@ function logCapture() {
 function initWatcher() {
   api = new tgramMock("chatid", function (chatid, msg) { sendMessages.push({ chatid: chatid, message: msg }); });
   client = redis.createClient();
+  // clean redis
+  client.del('watch-lb-settings');
   watcher = new watchRuntime(api, client, "chatid");
   watcher.logger = logCapture;
 }
@@ -60,6 +62,7 @@ afterEach(() => {
   // console.log("SENT MESSAGES: ");
   // console.log(sendMessages);
   sendMessages = [];
+  watcher = null;
 });
 
 test('sendMessage', (done) => {
@@ -101,8 +104,36 @@ test('/now page error', (done) => {
 
 test('/status', (done) => {
   return loadGoodTest().then(async () => {
+    await watcher.checkWines();
+    sendMessages=[];
     await api.testTextReceived('/status');
     const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes/
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    done();
+  })
+});
+
+test('/status paused forever', (done) => {
+  return loadGoodTest().then(async () => {
+    await watcher.checkWines();
+    await api.testTextReceived('/pause');
+    sendMessages=[];
+    await api.testTextReceived('/status');
+    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nPaused until forever/
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    done();
+  })
+});
+
+test('/status paused for a while', (done) => {
+  return loadGoodTest().then(async () => {
+    await watcher.checkWines();
+    await api.testTextReceived('/pause 15d');
+    sendMessages=[];
+    await api.testTextReceived('/status');
+    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nPaused until /
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
