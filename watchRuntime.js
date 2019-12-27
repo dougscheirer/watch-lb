@@ -1,4 +1,4 @@
-require('dotenv').config()
+require('dotenv').config();
 const curl = new (require('curl-request'))();
 const parser = require('node-html-parser');
 const crypto = require('crypto');
@@ -199,6 +199,10 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       this.sendMessage("Resuming with check interval of " + mjs.duration(this.savedSettings.defaultRate * 1000 * 60).humanize());
     },
 
+    this.handleSettings = (msg) => {
+      this.sendMessage(JSON.stringify(this.savedSettings));
+    },
+    
     this.logError = async (message) => {
       this.logger("ERROR >>>");
       this.logger(message);
@@ -242,10 +246,10 @@ function watchRuntime(telegramApi, redisApi, chatid) {
 
           // parse the body and look for the offer-name class
           const root = parser.parse(body);
-          // TODO: catch parse errors
+          // catch parse errors?  I think those just end up as roots with no data
           const offerName = root.querySelector(".offer-name");
           if (!offerName) {
-            this.logError("offer-name class not found, perhaps the page formatting has changed");
+            this.logError("offer-name class not found, perhaps the page formatting has changed or there was a page load error");
             return;
           }
 
@@ -271,7 +275,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
           this.savedSettings.lastMD5Update = new Date();
           this.saveSettings();
 
-          for (name in this.savedSettings.matching) {
+          for (var name in this.savedSettings.matching) {
             if (body.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
               const that = this;
 	            this.sendMessage("Found a match for " + this.savedSettings.matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com")
@@ -294,6 +298,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
         });
     },
 
+    /* jshint expr: true */
     this.loadSettings = async (start) => {
       return this.getAsync('watch-lb-settings').then((res) => {
         if (!res) {
@@ -303,7 +308,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
         } else {
           var loaded = JSON.parse(res);
           // merge with our settings
-          for (setting in this.savedSettings) {
+          for (var setting in this.savedSettings) {
             if (typeof loaded[setting] != 'undefined') {
               // TODO: treat 'matching' as its own merge?
               // upside: adding new defaults go in on reboot
@@ -317,6 +322,8 @@ function watchRuntime(telegramApi, redisApi, chatid) {
           this.savedSettings.lastIntervalUpdate = (this.savedSettings.lastIntervalUpdate == null) ? null : new Date(this.savedSettings.lastIntervalUpdate);
         }
 
+        this.logger("Settings:");
+        this.logger(this.savedSettings);
 
         // now we have master settings, continue with booting
         if (!this.savedSettings.defaultRate) {
@@ -352,19 +359,22 @@ function watchRuntime(telegramApi, redisApi, chatid) {
   telegramApi.onText(/\/pause (.+)/, this.handlePause);
   // /resume
   telegramApi.onText(/\/resume$/, this.handleResume);
+  // /help
   telegramApi.onText(/\/help$/, () => {
-    this.sendMessage("Commands:\n"
-    + "/start\n"
-    + "/list [default]\n"
-    + "/status\n"
-    + "/add (term)\n"
-    + "/del (term)\n"
-    + "/now\n"
-    + "/uptick (duration | default\n"
-    + "/pause [duration]\n"
-    + "/resume\n"
-    + "/help");
-  })
-};
+    this.sendMessage("Commands:\n" +
+      "/start\n" +
+      "/list [default]\n" +
+      "/status\n" +
+      "/add (term)\n" +
+      "/del (term)\n" +
+      "/now\n" +
+      "/uptick (duration | default)\n" +
+      "/pause [duration]\n" +
+      "/resume\n" +
+      "/help");
+  });
+  // /settings
+  telegramApi.onText(/\/settings/, this.handleSettings);
+}
 
 exports.watchRuntime = watchRuntime;

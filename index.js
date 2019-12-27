@@ -1,5 +1,5 @@
 // .env reader
-require('dotenv').config()
+require('dotenv').config();
 const telegram = require('node-telegram-bot-api');
 const os = require('os');
 const redis = require("redis");

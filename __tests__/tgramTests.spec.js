@@ -71,7 +71,7 @@ test('sendMessage', (done) => {
     expect(sendMessages[0].message).toEqual("this is a pizza");
     expect(sendMessages.length).toEqual(1);
     done();
-  })
+  });
 });
 
 test('/now positive result', (done) => {
@@ -81,7 +81,7 @@ test('/now positive result', (done) => {
       expect(sendMessages.length).toEqual(1);
       done();
     });
-  })
+  });
 });
 
 test('/now no result', (done) => {
@@ -90,7 +90,7 @@ test('/now no result', (done) => {
     expect(sendMessages[0].message).toEqual("No matching terms in 'pizza'");
     expect(sendMessages.length).toEqual(1);
     done();
-  })
+  });
 });
 
 test('/now page error', (done) => {
@@ -99,7 +99,7 @@ test('/now page error', (done) => {
     expect(sendMessages[0].message).toEqual("Fetch error: 404");
     expect(sendMessages.length).toEqual(1);
     done();
-  })
+  });
 });
 
 test('/status', (done) => {
@@ -107,11 +107,11 @@ test('/status', (done) => {
     await watcher.checkWines();
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes/
+    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
-  })
+  });
 });
 
 test('/status paused forever', (done) => {
@@ -120,11 +120,11 @@ test('/status paused forever', (done) => {
     await api.testTextReceived('/pause');
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nPaused until forever/
+    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nPaused until forever/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
-  })
+  });
 });
 
 test('/status paused for a while', (done) => {
@@ -133,27 +133,27 @@ test('/status paused for a while', (done) => {
     await api.testTextReceived('/pause 15d');
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nPaused until /
+    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nPaused until /;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
-  })
+  });
 });
 
 test('/list', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/list');
-    const regex=/cabernet/
+    const regex=/cabernet/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
-  })
+  });
 });
 
 test('/list default', (done) => {
   return loadGoodTest().then(async () => {
     // first add something
-    const regex=/pizza/
+    const regex=/pizza/;
     await api.testTextReceived("/add pizza");
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     sendMessages = [];
@@ -164,116 +164,116 @@ test('/list default', (done) => {
     expect(regex.test(sendMessages[0].message)).toBeFalsy();
     watcher.logger = logCapture;
     done();
-  })
+  });
 });
 
 test('/uptick 3', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/uptick 3');
-    const regex=/Check interval changed to 3 minutes/
+    const regex=/Check interval changed to 3 minutes/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     // expect(sendMessages.length).toEqual(2);
     done();
-  })
+  });
 });
 
 test('/uptick 1d', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/uptick 1d');
-    const regex=/Check interval changed to a day/
+    const regex=/Check interval changed to a day/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     // expect(sendMessages.length).toEqual(2);
     done();
-  })
+  });
 });
 
 test('/uptick default', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/uptick default');
-    const regex=/Check interval changed to 15 minutes/
+    const regex=/Check interval changed to 15 minutes/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     // expect(sendMessages.length).toEqual(2);
     done();
-  })
+  });
 });
 
 test('/uptick nothing', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/uptick nothing');
-    const regex=/nothing is not a valid number/
+    const regex=/nothing is not a valid number/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     // expect(sendMessages.length).toEqual(1);
     done();
-  })
+  });
 });
 
 test('/start', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/start');
-    const regex=/Your chat id is chatid/
+    const regex=/Your chat id is chatid/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
-  })
+  });
 });
 
 test('/add pizza', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/add pizza');
-    const regex=/pizza/
+    const regex=/pizza/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(2);
     expect(/Found a match/.test(sendMessages[1].message)).toBeTruthy();
     done();
-  })
+  });
 });
 
 test('/add cabernet', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/add cabernet');
-    const regex=/already a search term/
+    const regex=/already a search term/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
-  })
+  });
 });
 
 test('/del cabernet', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/del cabernet');
-    const regex=/cabernet/
+    const regex=/cabernet/;
     expect(regex.test(sendMessages[0].message)).toBeFalsy();
     expect(sendMessages.length).toEqual(2);
     done();
-  })
+  });
 });
 
 test('/del pizza', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/del pizza');
-    const regex=/is not a search term/
+    const regex=/is not a search term/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
-  })
+  });
 });
 
 test('/pause', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/pause');
-    const regex=/Pausing until forever/
+    const regex=/Pausing until forever/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     // make sure it will not check
     sendMessages=[];
     watcher.checkWines(true);
-    const regex2=/Paused, use \/resume to restart/
+    const regex2=/Paused, use \/resume to restart/;
     expect(regex2.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     // resume
     sendMessages=[];
     api.testTextReceived('/resume');
-    const regex3=/Resuming with check interval of/
+    const regex3=/Resuming with check interval of/;
     expect(regex3.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -283,21 +283,35 @@ test('/pause', (done) => {
 test('/pause 2 weeks', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/pause 2 weeks');
-    const regex=/Pausing until/
+    const regex=/Pausing until/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     // make sure it will not check
     sendMessages=[];
     watcher.checkWines(true);
-    const regex2=/Paused, will resume on/
+    const regex2=/Paused, will resume on/;
     expect(regex2.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     // resume
     sendMessages=[];
     api.testTextReceived('/resume');
-    const regex3=/Resuming with check interval of/
+    const regex3=/Resuming with check interval of/;
     expect(regex3.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
+test('/settings', (done) => {
+  return loadGoodTest().then(async () => {
+    await api.testTextReceived('/settings');
+    expect(sendMessages.length).toEqual(1);
+    var settingsJson = null;
+    try {
+      settingsJson = JSON.parse(sendMessages[0].message);
+    } catch (e) {
+      expect(e).toBeFalsy(); // we failed
+    }
     done();
   });
 });
