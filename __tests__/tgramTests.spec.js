@@ -107,7 +107,7 @@ test('/status', (done) => {
     await watcher.checkWines();
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\ngit: (.*)/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();

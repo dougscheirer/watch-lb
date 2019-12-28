@@ -6,6 +6,7 @@ const mjs = require('moment');
 const redis = require("redis");
 const { promisify } = require('util');
 const durationParser = require('parse-duration');
+const fs = require('fs');
 
 const DEFAULT_RATE = 15;
 
@@ -92,6 +93,12 @@ function watchRuntime(telegramApi, redisApi, chatid) {
        }
       } catch (e) {
         this.logger(e);
+      }
+      try {
+	const contents = fs.readFileSync('./git-head.txt', 'utf8');
+	msgResp += "\n" + contents;
+      } catch(e) {
+	msgResp += "\ngit: intermediate build";
       }
       this.sendMessage(msgResp);
       this.logger(msg);
@@ -374,7 +381,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       "/help");
   });
   // /settings
-  telegramApi.onText(/\/settings/, this.handleSettings);
+  telegramApi.onText(/\/settings$/, this.handleSettings);
 }
 
 exports.watchRuntime = watchRuntime;
