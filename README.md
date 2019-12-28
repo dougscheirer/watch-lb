@@ -5,7 +5,7 @@ Build:
 Install:  
 ` $ sudo systemd-install.sh`  
 Restart:  
-` $ docker-compose restart`  
+` $ docker-compose stop && docker-compose start`  
 Logs:  
 ` $ docker-compose logs`
  

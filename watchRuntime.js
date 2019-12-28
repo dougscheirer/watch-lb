@@ -95,10 +95,10 @@ function watchRuntime(telegramApi, redisApi, chatid) {
         this.logger(e);
       }
       try {
-	const contents = fs.readFileSync('./git-head.txt', 'utf8');
-	msgResp += "\n" + contents;
+        const contents = fs.readFileSync('./git-head.txt', 'utf8');
+        msgResp += "\ngit: \n" + contents;
       } catch(e) {
-	msgResp += "\ngit: intermediate build";
+      	msgResp += "\ngit: intermediate build";
       }
       this.sendMessage(msgResp);
       this.logger(msg);
