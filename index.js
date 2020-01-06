@@ -22,6 +22,9 @@ watcher.loadSettings().then((res) => {
     watcher.sendMessage("Looks like the system just restarted, uptime is " + os.uptime());
   }
 
+  // note that we're starting up
+  watcher.logStartTime();
+
   // just in case, always run an initial check.  with all of the cacheing we're doing, 
   // we should not be over-communicating
   watcher.checkWines();

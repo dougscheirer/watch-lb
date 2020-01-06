@@ -107,7 +107,7 @@ test('/status', (done) => {
     await watcher.checkWines();
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\ngit: (.*)/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -120,7 +120,7 @@ test('/status paused forever', (done) => {
     await api.testTextReceived('/pause');
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nPaused until forever/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until forever/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -133,7 +133,7 @@ test('/status paused for a while', (done) => {
     await api.testTextReceived('/pause 15d');
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nPaused until /;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until /;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
