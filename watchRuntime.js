@@ -39,6 +39,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
 
     this.runtimeSettings = {
       intervalTimer: null,
+      startTime: new Date()
     },
 
     this.savedSettings = {
@@ -49,7 +50,6 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       matching: matching_default.slice(),
       defaultRate: null,
       pauseUntil: -1,
-      startTime: -1
     },
 
     this.saveSettings = () => {
@@ -88,7 +88,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
         msgResp += "Last difference at " + this.savedSettings.lastMD5Update + " (" + duration.humanize() + ")\n";
       }
       msgResp += "Current interval: " + mjs.duration(this.savedSettings.defaultRate * 1000 * 60).humanize() + "\n";
-      msgResp += "Service uptime: " + mjs.duration(new Date() - this.savedSettings.startTime).humanize();
+      msgResp += "Service uptime: " + mjs.duration(new Date() - this.runtimeSettings.startTime).humanize();
       try {
         if (this.savedSettings.pauseUntil != -1) {
          msgResp += "\nPaused until " + ((this.savedSettings.pauseUntil > 0) ? this.savedSettings.pauseUntil : "forever");
@@ -346,7 +346,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
     },
 
     this.logStartTime = () => {
-      this.savedSettings.startTime = new Date();
+      this.runtimeSettings.startTime = new Date();
       this.saveSettings();
     };
 

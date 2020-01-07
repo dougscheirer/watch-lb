@@ -114,6 +114,32 @@ test('/status', (done) => {
   });
 });
 
+test('/status with 0 start time', (done) => {
+  return loadGoodTest().then(async () => {
+    await watcher.checkWines();
+    watcher.runtimeSettings.startTime = new Date();
+    sendMessages=[];
+    await api.testTextReceived('/status');
+    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: a few seconds\ngit: (.*)/;
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
+test('/status with 5m start time', (done) => {
+  return loadGoodTest().then(async () => {
+    await watcher.checkWines();
+    watcher.runtimeSettings.startTime = new Date(new Date() - 5*60*1000);
+    sendMessages=[];
+    await api.testTextReceived('/status');
+    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: 5 minutes\ngit: (.*)/;
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
 test('/status paused forever', (done) => {
   return loadGoodTest().then(async () => {
     await watcher.checkWines();
