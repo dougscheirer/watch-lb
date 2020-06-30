@@ -45,6 +45,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
     this.savedSettings = {
       lastMD5: null,
       lastMD5Update: null,
+      lastMessage: null,
       lastIntervalUpdate: null,
       sent24hrMessage: false,
       matching: matching_default.slice(),
@@ -287,15 +288,21 @@ function watchRuntime(telegramApi, redisApi, chatid) {
           for (var name in this.savedSettings.matching) {
             if (body.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
               const that = this;
-	            this.sendMessage("Found a match for " + this.savedSettings.matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com")
-                .then(function (data) {
-                  that.logger("We got some data");
-                  that.logger(data);
-                })
-                .catch(function (err) {
-                  that.logError(err);
-                });
-              return;
+              // format the message and compare to the last one, if they are identical just skip it
+              const msg = "Found a match for " + this.savedSettings.matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com";
+              if (msg != this.savedSettings.lastMessage) {
+                this.sendMessage(msg)
+                  .then(function (data) {
+                    that.savedSettings.lastMessage = msg;
+                    that.saveSettings();
+                    that.logger("We got some data");
+                    that.logger(data);
+                  })
+                  .catch(function (err) {
+                    that.logError(err);
+                  });
+                return;
+              }
             }
           }
           if (!!reportNothing)

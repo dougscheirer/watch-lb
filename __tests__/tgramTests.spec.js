@@ -93,6 +93,20 @@ test('/now no result', (done) => {
   });
 });
 
+test('/now near-duplicate no result', (done) => {
+  return loadGoodTest().then(async () => {
+    await watcher.checkWines();
+    // should have a match message
+    expect(sendMessages[0].message).toEqual("Found a match for cabernet in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com")
+    // modify the MD5 but leave the content the same
+    watcher.savedSettings.lastMD5 = "";
+    await watcher.checkWines();
+    // should get no message
+    expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
 test('/now page error', (done) => {
   return loadFetchError().then(async () => {
     await api.testTextReceived('/now');
