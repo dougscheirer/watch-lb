@@ -17,6 +17,7 @@
     "node-html-parser": "^1.1.16",
     "node-telegram-bot-api": "^0.40.0",
     "parse-duration": "^0.1.2",
+    "pm2": "^4.4.0",
     "redis": "^2.8.0"
   },
   "devDependencies": {
