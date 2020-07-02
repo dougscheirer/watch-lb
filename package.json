@@ -13,16 +13,15 @@
   "dependencies": {
     "curl-request": "^1.1.1",
     "dotenv": "^8.2.0",
-    "moment": "^2.24.0",
-    "node-html-parser": "^1.1.16",
-    "node-telegram-bot-api": "^0.40.0",
-    "parse-duration": "^0.1.2",
-    "pm2": "^4.4.0",
-    "redis": "^2.8.0"
+    "moment": "^2.27.0",
+    "node-html-parser": "^1.2.20",
+    "node-telegram-bot-api": "^0.50.0",
+    "parse-duration": "^0.4.4",
+    "redis": "^3.0.2"
   },
   "devDependencies": {
     "eslint": "^6.8.0",
-    "jest": "^24.9.0",
+    "jest": "^26.1.0",
     "redis-mock": "^0.47.0"
   },
   "jshintConfig": {
