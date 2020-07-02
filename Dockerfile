@@ -1,5 +1,9 @@
 FROM node:10
 
+# set the TZ
+ENV TZ=America/Los_Angeles
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
 # Create app directory
 WORKDIR /usr/src/app
 
