@@ -6,6 +6,8 @@ services:
     restart: always
     entrypoint: redis-server
     command: ["--appendonly", "yes"]
+    volumes:
+      - ./redis-docker-data:/data
   watch-lb:
     restart: always
     container_name: watch-lb
