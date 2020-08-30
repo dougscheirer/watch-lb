@@ -10,7 +10,7 @@ const opts = { host: process.env.REDIS_HOST || "localhost", port: process.env.RE
 const client = redis.createClient(opts);
 
 // connect to telegram
-const api = new telegram(process.env.API_TOKEN, { polling: true });
+const api = new telegram(process.env.API_TOKEN, { polling: true, onlyFirstMatch: true });
 
 // now create our runtime
 const watcher = new watchRuntime(api, client, process.env.CHAT_ID);

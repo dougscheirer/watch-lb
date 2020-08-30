@@ -12,7 +12,10 @@ function logCapture() {
 }
 
 function initWatcher() {
-  api = new tgramMock("chatid", function (chatid, msg) { sendMessages.push({ chatid: chatid, message: msg }); });
+  api = new tgramMock(
+          "chatid", 
+          function (chatid, msg) { sendMessages.push({ chatid: chatid, message: msg }); },
+          { onlyFirstMatch: true });
   client = redis.createClient();
   // clean redis
   client.del('watch-lb-settings');
@@ -352,6 +355,15 @@ test('/settings', (done) => {
     } catch (e) {
       expect(e).toBeFalsy(); // we failed
     }
+    done();
+  });
+});
+
+test('/badcmd', (done) => {
+  return loadGoodTest().then(async () => {
+    await api.testTextReceived('/badcmd');
+    expect(sendMessages.length).toEqual(1);
+    expect(sendMessages[0].message).toEqual("Unknown command");
     done();
   });
 });

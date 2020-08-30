@@ -397,6 +397,9 @@ function watchRuntime(telegramApi, redisApi, chatid) {
   });
   // /settings
   telegramApi.onText(/\/settings$/, this.handleSettings);
+  telegramApi.onText(/\/*/, () => {
+    this.sendMessage("Unknown command");
+  })
 }
 
 exports.watchRuntime = watchRuntime;

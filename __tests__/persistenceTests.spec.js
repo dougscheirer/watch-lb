@@ -16,7 +16,10 @@ function logCapture() {
 }
 
 function initWatcher() {
-  api = new tgramMock("chatid", function (chatid, msg) { sendMessages.push({ chatid: chatid, message: msg }); });
+  api = new tgramMock(
+    "chatid", 
+    function (chatid, msg) { sendMessages.push({ chatid: chatid, message: msg }); },
+    { onlyFirstMatch: true });
   client = redis.createClient();
   getAsync = promisify(client.get).bind(client),
   watcher = new watchRuntime(api, client, "chatid");
