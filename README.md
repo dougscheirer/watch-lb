@@ -1,7 +1,8 @@
 Confirm build:  
 ` $ npm test`  
 Build:  
-` $ docker-compose build`  
+  no git SHA:   ` $ docker-compose build`
+  with git SHA: ` $ ./docker-build.sh`
 Install:  
 ` $ sudo systemd-install.sh`  
 Restart:  
