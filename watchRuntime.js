@@ -247,7 +247,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
           return; // we're paused
         }
       }
-      this.fetchUrl("https://lastbottlewines.com")
+      this.fetchUrl("https://www.lastbottlewines.com")
         .then(({ statusCode, body, headers }) => {
           if (statusCode != 200) {
             this.logError("Fetch error: " + statusCode);
