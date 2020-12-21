@@ -23,7 +23,7 @@ const matching_default = [
   "les ormes",
   "petit"];
 
-function watchRuntime(telegramApi, redisApi, chatid) {
+function watchRuntime(telegramApi, redisApi, chatid, auth) {
   if (!telegramApi)
     throw new Error("telegramApi is required");
   if (!redisApi)
@@ -34,6 +34,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
   this.telegramApi = telegramApi,
     this.client = redisApi,
     this.chatid = chatid,
+    this.auth = auth,
     this.getAsync = promisify(this.client.get).bind(this.client),
     this.logger = console.log,
 
@@ -47,6 +48,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       lastMD5Update: null,
       lastMessage: null,
       lastIntervalUpdate: null,
+      lastMatch: null,
       sent24hrMessage: false,
       matching: matching_default.slice(),
       defaultRate: null,
@@ -213,6 +215,77 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       this.sendMessage(JSON.stringify(this.savedSettings));
     },
     
+    this.login = () => {
+      // 1. get request on /login.html
+      this.fetchUrl("https://www.lastbottlewines.com/login")
+        .then(({ statusCode, body, headers }) => {
+          if (statusCode != 200) {
+            this.logError("Fetch error: " + statusCode);
+            return null;
+          }
+
+          // get the set-cookies for the POST request
+          var cookies = headers['set-cookie'];
+          // now POST with the cookies and our auth data as the body
+          var auth = this.auth;
+
+          this.postUrl("https://lastbottlewines.com/login.html", [ "Cookie: " + cookies ], auth)
+            .then(({ statusCode, body, headers }) => {
+              // check for a 302 redirect to /
+              if (statusCode != 302 || headers['location'] != '/') {
+                // failed!
+                return null;
+              }
+
+              // use the new cookies
+              cookies = headers['set-cookie'];
+
+              // grab the /
+              this.fetchUrl("https://lastbottlewines.com/", [ "Cookie: " + cookies ])
+                .then(({ statusCode, body, headers }) => {
+                  if (statusCode != 200) {
+                    return null;
+                  }
+                  // verify root now has the .account-link
+                  const root = parser.parse(body);
+                  const account = root.querySelector(".account-links").querySelector(".account-link");
+
+                  if (account == null) {
+                    return null;
+                  }
+
+                  return { cookies: headers['set-cookie'], body: body };
+                });
+            });
+          });
+    },
+
+    this.handleBuy = (msg, match) => {
+      var count = 0;
+      if (match.length == 2) {
+        count = parseInt(match[1]);
+      }
+
+      if (count <= 0) {
+        this.sendMessage("/buy N, count is required");
+        return;
+      }
+
+      // 1. login
+      var authState = this.login();
+      if (authState == null) {
+        this.sendMessage("Failed to authenticate");
+        return;
+      }
+
+      // 2. make sure it's still available
+
+      // 3. [TODO] if no count figure out the minimum to ship
+      // 4. submit the form (no shipping insurance)
+      // 5. validate the response somehow
+      this.sendMessage("TODO: implement buy")
+    },
+
     this.logError = async (message) => {
       this.logger("ERROR >>>");
       this.logger(message);
@@ -224,9 +297,13 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       return telegramApi.sendMessage(this.chatid, message);
     },
 
-    // allow for fetchUrl to be overridden in test mode
-    this.fetchUrl = (url) => {
-      return curl.get(url);
+    // allow for fetchUrl and postUrl to be overridden in test mode
+    this.fetchUrl = (url, heaaders) => {
+      return curl.setHeaders(headers).get(url);
+    },
+
+    this.postUrl = (url, headers) => {
+      return curl.setHeaders(headers).post(url);
     },
 
     this.checkWines = (reportNothing) => {
@@ -258,6 +335,8 @@ function watchRuntime(telegramApi, redisApi, chatid) {
           const root = parser.parse(body);
           // catch parse errors?  I think those just end up as roots with no data
           const offerName = root.querySelector(".offer-name");
+          const offerPrice= root.querySelector(".amount.lb");
+
           if (!offerName) {
             this.logError("offer-name class not found, perhaps the page formatting has changed or there was a page load error");
             return;
@@ -288,8 +367,11 @@ function watchRuntime(telegramApi, redisApi, chatid) {
           for (var name in this.savedSettings.matching) {
             if (body.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
               const that = this;
+              // remember the offer name for verification check on /buy
+              this.savedSettings.lastMatch = offerName.rawText;
+              this.saveSettings();
               // format the message and compare to the last one, if they are identical just skip it
-              const msg = "Found a match for " + this.savedSettings.matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com";
+              const msg = "Found a match for " + this.savedSettings.matching[name] + " ($" + offerPrice.rawText + ") in " + offerName.rawText + "\nhttps://lastbottlewines.com";
               if (msg != this.savedSettings.lastMessage) {
                 this.sendMessage(msg)
                   .then(function (data) {
@@ -359,7 +441,6 @@ function watchRuntime(telegramApi, redisApi, chatid) {
 
   
   // load up all of the text processors
-
   // /start
   telegramApi.onText(/\/start$/, this.handleStart);
   // /list
@@ -381,6 +462,9 @@ function watchRuntime(telegramApi, redisApi, chatid) {
   telegramApi.onText(/\/pause (.+)/, this.handlePause);
   // /resume
   telegramApi.onText(/\/resume$/, this.handleResume);
+  // buy count
+  telegramApi.onText(/\/buy$/, this.handleBuy);
+  telegramApi.onText(/\/buy (.+)/, this.handleBuy);
   // /help
   telegramApi.onText(/\/help$/, () => {
     this.sendMessage("Commands:\n" +

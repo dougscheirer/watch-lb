@@ -7,6 +7,8 @@ var sendMessages = [];
 var watcher = null;
 var api = null;
 
+var testAuth = "auth%5Busername%5D=me%40here.com&auth%5Bpassword%5D=password";
+
 function logCapture() {
   // don't spit out watcher messages
 }
@@ -19,43 +21,97 @@ function initWatcher() {
   client = redis.createClient();
   // clean redis
   client.del('watch-lb-settings');
-  watcher = new watchRuntime(api, client, "chatid");
+  watcher = new watchRuntime(api, client, "chatid", testAuth);
   watcher.logger = logCapture;
 }
 
-function loadWatcher(fetchFunc) {
+async function postResult(url, headers, body) { 
+  return { statusCode: 200, body: "fake post body result", headers: { 'set-cookie': [ 'one: 1', 'two: 2' ] }};
+}
+
+function loadWatcher(fetchFunc, postFunc) {
   initWatcher();
   watcher.fetchUrl = fetchFunc;
+  watcher.postUrl = (postFunc || postResult);
   return watcher.loadSettings(false);
 }
 
 function loadGoodTest() {
-  return loadWatcher(async (url) => {
-    var body;
-    try {
-      body = fs.readFileSync("./testdata/good.html").toString();
-    } catch (e) { 
-      console.log("error:" + e); 
+  return loadWatcher(async (url, headers) => {
+      var body;
+      try {
+        body = fs.readFileSync("./testdata/good.html").toString();
+      } catch (e) { 
+        console.log("error:" + e); 
+      }
+      return { statusCode: 200, body: body, headers: { result: "pie" } };
     }
-    return { statusCode: 200, body: body, headers: [{ result: "pie" }] };
-  });
+  );
+}
+
+function loadGoodPostTest() {
+  var testCookie = 'PIZZA=nom; PIE=yum';
+  return loadWatcher(async (url, headers) => {
+      var body;
+      try {
+        // if the url is login or login.html, see if the cookies are set
+          // if not, return the "not authorized" page with some random cookies
+          // if set, see if they match the cookies from the "not authorized" load and return a redirect to /
+        // if the url is /, check that the cookies are set and return the auth'd or non-auth'd page
+        if (url.endsWith('login') || url.endsWith('login.html')) {
+          if (headers == null || headers[0] != 'Cookie: ' + testCookie ) {
+            return { statusCode: 200, body: "login form", headers : { 'set-cookie' : testCookie }};
+          } else { 
+            return { statusCode: 302, body: "redirect to root, authenticated", headers: { 'location' : '/', 'set-cookie' : testCookie }};
+          }
+        } else {
+          // only other thing we care about is /
+          var body = null;
+          if (headers == null || headers[0] != 'Cookie: ' + testCookie) {
+            body = fs.readFileSync('./testdata/good-unauth.html');
+          } else {
+            body = fs.readFileSync('./testdata/good-auth.html');
+          }
+          return { statusCode: 200, body: body.toString(), headers: { 'set-cookie': testCookie } };
+        }
+      } catch (e) { 
+        console.log("error:" + e); 
+      }
+      return { statusCode: 500, body: "error", headers: null };
+    },
+    // this is the post handler
+    async (url, headers, body) => {
+      // are the headers right?
+      if (headers != null && headers[0] == 'Cookie: ' + testCookie) {
+        // is the body right?
+        if (body == testAuth) {
+          // if both, redirect to /
+          return { statusCode: 302, body: null, headers: { 'set-cookie' : testCookie, 'location': '/' }};
+        }
+      }
+      // otherwise, redirect to /login
+      return { statusCode: 200, body: "login form", headers : { 'set-cookie' : testCookie }};
+    }
+  );
 }
 
 function loadBadTest() {
   return loadWatcher(async (url) => {
-    // console.log("got a call for " + url);
-    return { statusCode: 200, body: 
-      "<html><head></head><body>Do not match stuff<h1 class=\"offer-name\">pizza</h1></body></html>", 
-      headers: [{ result: "pie" }] };
-  });
+      // console.log("got a call for " + url);
+      return { statusCode: 200, body: 
+        "<html><head></head><body>Do not match stuff<h1 class=\"offer-name\">pizza</h1></body></html>", 
+        headers: { result: "pie" } };
+    }
+  );
 }
 
 function loadFetchError() {
   return loadWatcher(async (url) => {
-    // console.log("got a call for " + url);
-    return { statusCode: 404, body: null, headers: [{ result: "pie" }] };
-  });
-}
+      // console.log("got a call for " + url);
+      return { statusCode: 404, body: null, headers: { result: "pie" } };
+    }
+  );
+};
 
 beforeEach(() => {
   sendMessages = [];
@@ -80,7 +136,7 @@ test('sendMessage', (done) => {
 test('/now positive result', (done) => {
   return loadGoodTest().then(() => {
     api.testTextReceived('/now').then((res) => {
-      expect(sendMessages[0].message).toEqual("Found a match for cabernet in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com");
+      expect(sendMessages[0].message).toEqual("Found a match for cabernet ($89) in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com");
       expect(sendMessages.length).toEqual(1);
       done();
     });
@@ -100,7 +156,7 @@ test('/now near-duplicate no result', (done) => {
   return loadGoodTest().then(async () => {
     await watcher.checkWines();
     // should have a match message
-    expect(sendMessages[0].message).toEqual("Found a match for cabernet in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com")
+    expect(sendMessages[0].message).toEqual("Found a match for cabernet ($89) in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com")
     // modify the MD5 but leave the content the same
     watcher.savedSettings.lastMD5 = "";
     await watcher.checkWines();
@@ -364,6 +420,54 @@ test('/badcmd', (done) => {
     await api.testTextReceived('/badcmd');
     expect(sendMessages.length).toEqual(1);
     expect(sendMessages[0].message).toEqual("Unknown command");
+    done();
+  });
+});
+
+test('/buy 4', (done) => {
+  return loadGoodPostTest().then(async () => {
+    await watcher.checkWines();
+    sendMessages=[];
+    await api.testTextReceived('/buy 4');
+    const regex=/Successfully bought 4 bottles for a total price of \$356./;
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
+test('/buy', (done) => {
+  return loadGoodPostTest().then(async () => {
+    await watcher.checkWines();
+    sendMessages=[];
+    await api.testTextReceived('/buy');
+    const regex=/buy N, count is required$/;
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
+test('/buy bad login', (done) => {
+  return loadGoodPostTest().then(async () => {
+    await watcher.checkWines();
+    sendMessages=[];
+    await api.testTextReceived('/buy 4');
+    const regex=/buy N, count is required$/;
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
+test('/buy offer changed', (done) => {
+  return loadGoodPostTest().then(async () => {
+    await watcher.checkWines();
+    sendMessages=[];
+    await api.testTextReceived('/buy');
+    const regex=/buy N, count is required$/;
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
     done();
   });
 });

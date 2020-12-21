@@ -11,6 +11,8 @@ var api = null;
 var client = null;
 var getAsync = null;
 
+var testAuth = "auth%5Busername%5D=me%40here.com&auth%5Bpassword%5D=password";
+
 function logCapture() {
   // don't spit out watcher messages
 }
@@ -22,26 +24,32 @@ function initWatcher() {
     { onlyFirstMatch: true });
   client = redis.createClient();
   getAsync = promisify(client.get).bind(client),
-  watcher = new watchRuntime(api, client, "chatid");
+  watcher = new watchRuntime(api, client, "chatid", testAuth);
   watcher.logger = logCapture;
 }
 
-function loadWatcher(fetchFunc) {
+async function postResult(url, headers, body) { 
+  return { statusCode: 200, body: "fake post body result", headers: { 'set-cookie': ['one: 1', 'two: 2'] }};
+}
+
+function loadWatcher(fetchFunc, postFunc) {
   initWatcher();
   watcher.fetchUrl = fetchFunc;
+  watcher.postUrl = (postFunc || postResult);
   return watcher.loadSettings(false);
 }
 
 function loadGoodTest() {
   return loadWatcher(async (url) => {
-    var body;
-    try {
-      body = fs.readFileSync("./testdata/good.html").toString();
-    } catch (e) { 
-      console.log("error:" + e); 
+      var body;
+      try {
+        body = fs.readFileSync("./testdata/good.html").toString();
+      } catch (e) { 
+        console.log("error:" + e); 
+      }
+      return { statusCode: 200, body: body, headers: { result: "pie" } };
     }
-    return { statusCode: 200, body: body, headers: [{ result: "pie" }] };
-  });
+  );
 }
 
 function loadBadTest() {
@@ -56,7 +64,7 @@ function loadBadTest() {
 function loadFetchError() {
   return loadWatcher(async (url) => {
     // console.log("got a call for " + url);
-    return { statusCode: 404, body: null, headers: [{ result: "pie" }] };
+    return { statusCode: 404, body: null, headers: { result: "pie" } };
   });
 }
 
