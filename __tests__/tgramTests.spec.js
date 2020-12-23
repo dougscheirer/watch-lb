@@ -26,7 +26,7 @@ function initWatcher() {
 }
 
 async function postResult(url, headers, body) { 
-  return { statusCode: 200, body: "fake post body result", headers: { 'set-cookie': [ 'one: 1', 'two: 2' ] }};
+  return { statusCode: 200, body: "fake post body result", headers: { 'set-cookie': [ 'one: 1; path: /', 'two: 2; path: /' ] }};
 }
 
 function loadWatcher(fetchFunc, postFunc) {
@@ -49,8 +49,33 @@ function loadGoodTest() {
   );
 }
 
+function matchCookies(headers, cookies) {
+  // grab the kvps from cookies 
+  var cleanCookies = [];
+  for (var i in cookies) {
+    const splits = cookies[i].split(';')
+    cleanCookies.push(splits[0]);
+  }
+
+  for (var i in headers) {
+    if (headers[i].startsWith("Cookie:")) {
+      var matches = 0;
+      const cookies = headers[i].substr(8);
+      const splits = cookies.split('; ');
+      for (var c in splits) {
+        if (cleanCookies.indexOf(splits[c]) >= 0) {
+          matches++;
+        }
+      }
+      return (matches == cleanCookies.length);
+    }
+  }
+
+  return false;
+}
+
 function loadGoodPostTest() {
-  var testCookie = 'PIZZA=nom; PIE=yum';
+  var testCookie = [ 'PIZZA=nom; path=/', 'PIE=yum' ];
   return loadWatcher(async (url, headers) => {
       var body;
       try {
@@ -59,7 +84,7 @@ function loadGoodPostTest() {
           // if set, see if they match the cookies from the "not authorized" load and return a redirect to /
         // if the url is /, check that the cookies are set and return the auth'd or non-auth'd page
         if (url.endsWith('login') || url.endsWith('login.html')) {
-          if (headers == null || headers[0] != 'Cookie: ' + testCookie ) {
+          if (headers == null || !matchCookies(headers, testCookie))  {
             return { statusCode: 200, body: "login form", headers : { 'set-cookie' : testCookie }};
           } else { 
             return { statusCode: 302, body: "redirect to root, authenticated", headers: { 'location' : '/', 'set-cookie' : testCookie }};
@@ -67,7 +92,7 @@ function loadGoodPostTest() {
         } else {
           // only other thing we care about is /
           var body = null;
-          if (headers == null || headers[0] != 'Cookie: ' + testCookie) {
+          if (headers == null || !matchCookies(headers, testCookie)) {
             body = fs.readFileSync('./testdata/good-unauth.html');
           } else {
             body = fs.readFileSync('./testdata/good-auth.html');
@@ -82,7 +107,7 @@ function loadGoodPostTest() {
     // this is the post handler
     async (url, headers, body) => {
       // are the headers right?
-      if (headers != null && headers[0] == 'Cookie: ' + testCookie) {
+      if (headers != null && matchCookies(headers, testCookie)) {
         // is the body right?
         if (body == testAuth) {
           // if both, redirect to /
@@ -90,7 +115,7 @@ function loadGoodPostTest() {
         }
       }
       // otherwise, redirect to /login
-      return { statusCode: 200, body: "login form", headers : { 'set-cookie' : testCookie }};
+      return { statusCode: 302, headers : { 'set-cookie' : testCookie, location: "/login" }};
     }
   );
 }
@@ -180,7 +205,7 @@ test('/status', (done) => {
     await watcher.checkWines();
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\ngit: (.*)/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -193,7 +218,7 @@ test('/status with 0 start time', (done) => {
     watcher.runtimeSettings.startTime = new Date();
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: a few seconds\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: a few seconds\ngit: (.*)/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -206,7 +231,7 @@ test('/status with 5m start time', (done) => {
     watcher.runtimeSettings.startTime = new Date(new Date() - 5*60*1000);
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: 5 minutes\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: 5 minutes\ngit: (.*)/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -219,7 +244,7 @@ test('/status paused forever', (done) => {
     await api.testTextReceived('/pause');
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until forever/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until forever/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -232,7 +257,7 @@ test('/status paused for a while', (done) => {
     await api.testTextReceived('/pause 15d');
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until /;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until /;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -440,23 +465,29 @@ test('/buy', (done) => {
   return loadGoodPostTest().then(async () => {
     await watcher.checkWines();
     sendMessages=[];
-    await api.testTextReceived('/buy');
-    const regex=/buy N, count is required$/;
-    expect(regex.test(sendMessages[0].message)).toBeTruthy();
-    expect(sendMessages.length).toEqual(1);
-    done();
+    api.testTextReceived('/buy').then((res) => {
+      const regex=/buy N, count is required$/;
+      console.log(sendMessages);
+      expect(regex.test(sendMessages[0].message)).toBeTruthy();
+      expect(sendMessages.length).toEqual(1);
+      done();
+    });
   });
 });
 
 test('/buy bad login', (done) => {
   return loadGoodPostTest().then(async () => {
+    // bad auth string
+    watcher.auth = "bad auth string";
     await watcher.checkWines();
     sendMessages=[];
-    await api.testTextReceived('/buy 4');
-    const regex=/buy N, count is required$/;
-    expect(regex.test(sendMessages[0].message)).toBeTruthy();
-    expect(sendMessages.length).toEqual(1);
-    done();
+    api.testTextReceived('/buy 4').then((res) => {
+      console.log(sendMessages);
+      const regex=/Failed to authenticate: Bad status code or location from post: 302 location: \/login$/;
+      expect(regex.test(sendMessages[0].message)).toBeTruthy();
+      expect(sendMessages.length).toEqual(1);
+      done();
+    });
   });
 });
 
@@ -464,10 +495,42 @@ test('/buy offer changed', (done) => {
   return loadGoodPostTest().then(async () => {
     await watcher.checkWines();
     sendMessages=[];
-    await api.testTextReceived('/buy');
-    const regex=/buy N, count is required$/;
-    expect(regex.test(sendMessages[0].message)).toBeTruthy();
-    expect(sendMessages.length).toEqual(1);
-    done();
+    api.testTextReceived('/buy 4').then((res) => {
+      console.log(sendMessages);
+      const regex=/buy N, count is required$/;
+      expect(regex.test(sendMessages[0].message)).toBeTruthy();
+      expect(sendMessages.length).toEqual(1);
+      done();
+    });
   });
+});
+
+test('/login ok', (done) => {
+  return loadGoodPostTest().then(async () => {
+    await watcher.checkWines();
+    sendMessages=[];
+    api.testTextReceived('/login').then( (res) => {
+      console.log(sendMessages);
+      const regex=/Authentication successful$/;
+      expect(regex.test(sendMessages[0].message)).toBeTruthy();
+      expect(sendMessages.length).toEqual(1);
+      done();
+    });
+  });
+});
+
+test('/login bad password', (done) => {
+  return loadGoodPostTest().then(async () => {
+    // bad auth string
+    watcher.auth = "bad auth string";
+    await watcher.checkWines();
+    sendMessages=[];
+    api.testTextReceived('/login').then( (res) => {
+      console.log(sendMessages);
+      const regex=/Failed to authenticate: Bad status code or location from post: 302 location: \/login$/;
+      expect(regex.test(sendMessages[0].message)).toBeTruthy();
+      expect(sendMessages.length).toEqual(1);
+      done();
+    });
+  })
 });

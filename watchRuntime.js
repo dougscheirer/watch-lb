@@ -1,5 +1,5 @@
 require('dotenv').config();
-const curl = new (require('curl-request'))();
+const curl = require('curl-request');
 const parser = require('node-html-parser');
 const crypto = require('crypto');
 const mjs = require('moment');
@@ -7,6 +7,8 @@ const redis = require("redis");
 const { promisify } = require('util');
 const durationParser = require('parse-duration');
 const fs = require('fs');
+const { url } = require('inspector');
+const { openStdin } = require('process');
 
 const DEFAULT_RATE = 15;
 
@@ -22,6 +24,10 @@ const matching_default = [
   "emilion",
   "les ormes",
   "petit"];
+
+const siteroot = "https://www.lastbottlewines.com/";
+const siteLogin = siteroot + "login";
+const siteLoginHtml = siteroot + "login.html";
 
 function watchRuntime(telegramApi, redisApi, chatid, auth) {
   if (!telegramApi)
@@ -46,6 +52,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
     this.savedSettings = {
       lastMD5: null,
       lastMD5Update: null,
+      lastOfferID: null,
       lastMessage: null,
       lastIntervalUpdate: null,
       lastMatch: null,
@@ -89,6 +96,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       if (this.savedSettings.lastMD5Update != null) {
         msgResp = "Last check at " + this.savedSettings.lastIntervalUpdate + "\n";
         msgResp += "Last difference at " + this.savedSettings.lastMD5Update + " (" + duration.humanize() + ")\n";
+        msgResp += "Last offer ID: " + this.savedSettings.lastOfferID + "\n";
       }
       msgResp += "Current interval: " + mjs.duration(this.savedSettings.defaultRate * 1000 * 60).humanize() + "\n";
       msgResp += "Service uptime: " + mjs.duration(new Date() - this.runtimeSettings.startTime).humanize();
@@ -122,6 +130,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       // invalidate the MD5 cache
       this.savedSettings.lastMD5 = null;
       this.savedSettings.lastMD5Update = null;
+      this.savedSettings.lastOfferID = null;
       // write to redis
       this.saveSettings();
       this.checkWines(true);
@@ -141,6 +150,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       // invalidate the MD5 cache
       this.savedSettings.lastMD5 = null;
       this.savedSettings.lastMD5Update = null;
+      this.savedSettings.lastOfferID = null;
       // write to redis
       this.saveSettings();
       this.checkWines(true);
@@ -214,53 +224,88 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
     this.handleSettings = (msg) => {
       this.sendMessage(JSON.stringify(this.savedSettings));
     },
-    
-    this.login = () => {
+
+    this.parseCookies = (setCookies, existing) => {
+      // strip the first cookie value, the rest is "interesting" but not really needed for this
+      // also split the key from the value so that we can merge them later
+      var cookies = existing || {};
+      for (var i in setCookies) {
+        const split = setCookies[i].split(';')[0];
+        const key = split.split('='); 
+        cookies[key[0]] = split;
+      }
+      return cookies;
+    },
+
+    this.joinCookies = (cookies) => {
+      if (cookies == null) {
+        return null;
+      }
+      var cookieString = "Cookie: ";
+      var cookieArray = [];
+      for (var key in cookies) {
+        cookieArray.push(cookies[key]);
+      }
+      return cookieString + cookieArray.join('; ');
+    },
+
+    this.login = async () => {
       // 1. get request on /login.html
-      this.fetchUrl("https://www.lastbottlewines.com/login")
+      return this.fetchUrl(siteLogin)
         .then(({ statusCode, body, headers }) => {
+          
           if (statusCode != 200) {
-            this.logError("Fetch error: " + statusCode);
-            return null;
+            this.logError("Fetch error for /login: " + statusCode);
+            return { error: "Fetch error for /login: " + statusCode };
           }
 
           // get the set-cookies for the POST request
-          var cookies = headers['set-cookie'];
+          var cookies = this.parseCookies(headers['set-cookie']);
           // now POST with the cookies and our auth data as the body
           var auth = this.auth;
 
-          this.postUrl("https://lastbottlewines.com/login.html", [ "Cookie: " + cookies ], auth)
+          return this.postUrl(siteLoginHtml, [ this.joinCookies(cookies), 'Content-Type: application/x-www-form-urlencoded' ], auth)
             .then(({ statusCode, body, headers }) => {
               // check for a 302 redirect to /
               if (statusCode != 302 || headers['location'] != '/') {
                 // failed!
-                return null;
+                return { error: "Bad status code or location from post: " + statusCode + " location: " + headers['location']};
               }
 
               // use the new cookies
-              cookies = headers['set-cookie'];
+              cookies = this.parseCookies(headers['set-cookie'], cookies);
 
               // grab the /
-              this.fetchUrl("https://lastbottlewines.com/", [ "Cookie: " + cookies ])
+              return this.fetchUrl(siteroot, [ this.joinCookies(cookies) ])
                 .then(({ statusCode, body, headers }) => {
                   if (statusCode != 200) {
-                    return null;
+                    return { error: "Bad status code from redirect: " + statusCode };
                   }
                   // verify root now has the .account-link
                   const root = parser.parse(body);
                   const account = root.querySelector(".account-links").querySelector(".account-link");
 
                   if (account == null) {
-                    return null;
+                    return { error: "No account link in page, not authenticated" };
                   }
 
-                  return { cookies: headers['set-cookie'], body: body };
+                  return { cookies: this.parseCookies(headers['set-cookie'], cookies), body: body };
                 });
             });
           });
     },
 
-    this.handleBuy = (msg, match) => {
+    this.handleLogin = async (msg) => {
+      return this.login().then( (authState) => {
+        if (authState == null || authState.error != null) {
+          this.sendMessage("Failed to authenticate: " + authState.error);
+        } else {
+          this.sendMessage("Authentication successful");
+        }
+      });
+    },
+
+    this.handleBuy = async (msg, match) => {
       var count = 0;
       if (match.length == 2) {
         count = parseInt(match[1]);
@@ -272,18 +317,31 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       }
 
       // 1. login
-      var authState = this.login();
-      if (authState == null) {
-        this.sendMessage("Failed to authenticate");
-        return;
-      }
+      return this.login().then((authState) => {
+        if (authState == null || authState.error != null) {
+          this.sendMessage("Failed to authenticate: " + authState.error);
+          return;
+        }
+  
+        // 2. make sure it's still available, i.e. the previous offer is identical to the current one
+        const offerData = this.parseOffer(authState.body);
+        if (offerData.id != this.savedSettings.lastOfferID) {
+          this.sendMessage("Offer has changed (prev/cur): " + this.savedSettings.lastOfferID + " / " + offerData.id);
+          return;
+        }
+        
+        // 3. [TODO] if no count figure out the minimum to ship
+        
+        // 4. submit the form (no shipping insurance)
+          // a. hit the "add to cart" link?
+          // b. POST tp change the number in the cart to N
+          // c. go to the submit page
+          // d. submit the order
 
-      // 2. make sure it's still available
+        // 5. validate the response somehow
 
-      // 3. [TODO] if no count figure out the minimum to ship
-      // 4. submit the form (no shipping insurance)
-      // 5. validate the response somehow
-      this.sendMessage("TODO: implement buy")
+        this.sendMessage("TODO: implement buy");
+      });
     },
 
     this.logError = async (message) => {
@@ -298,12 +356,49 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
     },
 
     // allow for fetchUrl and postUrl to be overridden in test mode
-    this.fetchUrl = (url, heaaders) => {
-      return curl.setHeaders(headers).get(url);
+    this.fetchUrl = (url, headers) => {
+      var fetch = new curl();
+      if (headers) {
+        fetch.setHeaders(headers);
+      }
+      return fetch.get(url);
     },
 
-    this.postUrl = (url, headers) => {
-      return curl.setHeaders(headers).post(url);
+    this.postUrl = (url, headers, data) => {
+      var post = new curl();
+      if (headers) {
+        post.setHeaders(headers);
+      }
+      if (data) {
+        post.setBody(data);
+      }
+      return post.post(url);
+    },
+
+    this.parseOfferLink = (text) => {
+      // TODO: this
+      return text;
+    },
+
+    this.parseOffer = (body) => {
+      const root = parser.parse(body);
+
+      const offerName = root.querySelector(".offer-name");
+      const offerPrice= root.querySelector(".amount.lb");
+      var offerLink = null;
+      const purchase = root.querySelector(".purchase-it");
+      if (purchase) {
+        const offer = purchase.querySelector("a");
+        offerLink = offer ? offer.getAttribute('href') : null;
+      }
+      const md5 = crypto.createHash('md5').update(body).digest("hex");
+      const rawText = (text) => { return (text && text.rawText ? text.rawText : null );}
+      return { name: offerName.rawText, 
+        price: rawText(offerPrice), 
+        link: rawText(offerLink), 
+        id: this.parseOfferLink(rawText(offerLink)), 
+        md5: md5
+      };
     },
 
     this.checkWines = (reportNothing) => {
@@ -332,19 +427,17 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
           }
 
           // parse the body and look for the offer-name class
-          const root = parser.parse(body);
           // catch parse errors?  I think those just end up as roots with no data
-          const offerName = root.querySelector(".offer-name");
-          const offerPrice= root.querySelector(".amount.lb");
+          const offerData = this.parseOffer(body);
 
-          if (!offerName) {
+          if (!offerData.name) {
             this.logError("offer-name class not found, perhaps the page formatting has changed or there was a page load error");
             return;
           }
 
           // write hash to a local FS to tell when page has changed?
-          const hash = crypto.createHash('md5').update(body).digest("hex");
-          if (!reportNothing && hash == this.savedSettings.lastMD5) {
+          // TODO: compare the offerID instead?
+          if (!reportNothing && offerData.md5 == this.savedSettings.lastMD5) {
             this.logger("No changes since last update");
             if (this.savedSettings.lastMD5Update != null) {
               this.logger("Time since last change: " + ((new Date()) - this.savedSettings.lastMD5Update));
@@ -360,18 +453,19 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
 
           // remember the MD5 and if we have sent our message
           this.savedSettings.sent24hrMessage = false;
-          this.savedSettings.lastMD5 = hash;
+          this.savedSettings.lastMD5 = offerData.md5;
           this.savedSettings.lastMD5Update = new Date();
+          this.savedSettings.lastOfferID = offerData.id;
           this.saveSettings();
 
           for (var name in this.savedSettings.matching) {
             if (body.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
               const that = this;
               // remember the offer name for verification check on /buy
-              this.savedSettings.lastMatch = offerName.rawText;
+              this.savedSettings.lastMatch = offerData.name;
               this.saveSettings();
               // format the message and compare to the last one, if they are identical just skip it
-              const msg = "Found a match for " + this.savedSettings.matching[name] + " ($" + offerPrice.rawText + ") in " + offerName.rawText + "\nhttps://lastbottlewines.com";
+              const msg = "Found a match for " + this.savedSettings.matching[name] + " ($" + offerData.price + ") in " + offerData.name + "\nhttps://lastbottlewines.com";
               if (msg != this.savedSettings.lastMessage) {
                 this.sendMessage(msg)
                   .then(function (data) {
@@ -388,8 +482,8 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
             }
           }
           if (!!reportNothing)
-            this.sendMessage("No matching terms in '" + offerName.rawText + "'");
-            this.logger("No matching terms for '" + offerName.rawText + "'");
+            this.sendMessage("No matching terms in '" + offerData.name + "'");
+            this.logger("No matching terms for '" + offerData.name + "'");
         })
         .catch((e) => {
           this.logger(e);
@@ -465,6 +559,8 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
   // buy count
   telegramApi.onText(/\/buy$/, this.handleBuy);
   telegramApi.onText(/\/buy (.+)/, this.handleBuy);
+  // login check
+  telegramApi.onText(/\/login$/, this.handleLogin);
   // /help
   telegramApi.onText(/\/help$/, () => {
     this.sendMessage("Commands:\n" +
@@ -477,6 +573,8 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       "/uptick (duration | default)\n" +
       "/pause [duration]\n" +
       "/resume\n" +
+      "/buy (count)\n" +
+      "/login\n" +
       "/help");
   });
   // /settings
