@@ -7,7 +7,7 @@ const redis = require("redis");
 const { promisify } = require('util');
 const durationParser = require('parse-duration');
 const fs = require('fs');
-const { url } = require('inspector');
+const url = require('url');
 const { openStdin } = require('process');
 
 const DEFAULT_RATE = 15;
@@ -376,8 +376,10 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
     },
 
     this.parseOfferLink = (text) => {
-      // TODO: this
-      return text;
+      // the offer id is the last part of the link minus the .html
+      const parsed = url.parse(text);
+      const split=parsed.pathname.split('/');
+      return split[split.length-1].split('.')[0];
     },
 
     this.parseOffer = (body) => {
@@ -395,8 +397,8 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       const rawText = (text) => { return (text && text.rawText ? text.rawText : null );}
       return { name: offerName.rawText, 
         price: rawText(offerPrice), 
-        link: rawText(offerLink), 
-        id: this.parseOfferLink(rawText(offerLink)), 
+        link: offerLink, 
+        id: this.parseOfferLink(offerLink), 
         md5: md5
       };
     },
