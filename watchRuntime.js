@@ -253,7 +253,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       // 1. get request on /login.html
       return this.fetchUrl(siteLogin)
         .then(({ statusCode, body, headers }) => {
-          
+         
           if (statusCode != 200) {
             this.logError("Fetch error for /login: " + statusCode);
             return { error: "Fetch error for /login: " + statusCode };
@@ -265,33 +265,31 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
           var auth = this.auth;
 
           return this.postUrl(siteLoginHtml, [ this.joinCookies(cookies), 'Content-Type: application/x-www-form-urlencoded' ], auth)
-            .then(({ statusCode, body, headers }) => {
-              // check for a 302 redirect to /
-              if (statusCode != 302 || headers['location'] != '/') {
-                // failed!
-                return { error: "Bad status code or location from post: " + statusCode + " location: " + headers['location']};
-              }
+        }).then(({ statusCode, body, headers }) => {
+            // check for a 302 redirect to /
+            if (statusCode != 302 || headers['location'] != '/') {
+              // failed!
+              return { error: "Bad status code or location from post: " + statusCode + " location: " + headers['location']};
+            }
 
-              // use the new cookies
-              cookies = this.parseCookies(headers['set-cookie'], cookies);
+            // use the new cookies
+            cookies = this.parseCookies(headers['set-cookie'], cookies);
 
-              // grab the /
-              return this.fetchUrl(siteroot, [ this.joinCookies(cookies) ])
-                .then(({ statusCode, body, headers }) => {
-                  if (statusCode != 200) {
-                    return { error: "Bad status code from redirect: " + statusCode };
-                  }
-                  // verify root now has the .account-link
-                  const root = parser.parse(body);
-                  const account = root.querySelector(".account-links").querySelector(".account-link");
+            // grab the /
+            return this.fetchUrl(siteroot, [ this.joinCookies(cookies) ])
+        }).then(({ statusCode, body, headers }) => {
+            if (statusCode != 200) {
+              return { error: "Bad status code from redirect: " + statusCode };
+            }
+            // verify root now has the .account-link
+            const root = parser.parse(body);
+            const account = root.querySelector(".account-links").querySelector(".account-link");
 
-                  if (account == null) {
-                    return { error: "No account link in page, not authenticated" };
-                  }
+            if (account == null) {
+              return { error: "No account link in page, not authenticated" };
+            }
 
-                  return { cookies: this.parseCookies(headers['set-cookie'], cookies), body: body };
-                });
-            });
+            return { cookies: this.parseCookies(headers['set-cookie'], cookies), body: body };
           });
     },
 
@@ -305,6 +303,44 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       });
     },
 
+    this.validateOffer = (authState, count) => {
+      if (authState == null || authState.error != null) {
+        this.sendMessage("Failed to authenticate: " + authState.error);
+        return;
+      }
+
+      // 2. make sure it's still available, i.e. the previous offer is identical to the current one
+      const offerData = this.parseOffer(authState.body);
+      if (offerData.id != this.savedSettings.lastOfferID) {
+        return Promise.reject("Offer has changed (prev/cur): " + this.savedSettings.lastOfferID + " / " + offerData.id);
+      }
+
+      return offerData;
+    },
+
+    this.addToCart = async (authState, count, offerData) => {
+        return this.fetchUrl(siteroot + "cart/update_quantity/" + offerData.id + "/" + count + "/", authState.cookies)
+    },
+
+    this.validateCartResponse = (statusCode, body, offerData, count) => {
+      // validate the JSON response: 
+      // {"quantity":(count)),"subtotal":(price*count),"shipping":0,"tax":(\d+.\d+),"discount":(\d+),"credits":(\d+),"total":(\d+.\d+)}
+      var resp = JSON.parse(body);
+      if (statusCode != 200 || resp.error != null)  {
+        return { error: "Bad response from cart (" + statusCode + ") :" + resp.error };
+      }
+      // price matches what we expected
+      if (resp.subtotal != offerData.price * count) { 
+        return { error: "Unexpected subtotal: got " + resp.subtotal + " but expected " + offerData * count};
+      }
+      // hard code a spending limit
+      if (resp.subtotal > 200) {
+        return { error: "Exceeded max spending limit: " + resp.subtotal};
+      }
+
+      return resp;
+    },
+
     this.handleBuy = async (msg, match) => {
       var count = 0;
       if (match.length == 2) {
@@ -316,32 +352,42 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
         return;
       }
 
+      var auth, offerData;
+
       // 1. login
       return this.login().then((authState) => {
-        if (authState == null || authState.error != null) {
-          this.sendMessage("Failed to authenticate: " + authState.error);
-          return;
+        auth = authState
+        offerData = this.validateOffer(authState, count);
+        return this.addToCart(authState, count, offerData);
+      }).then( (statusCode, body, headers ) => {
+        var resp = this.validateCartResponse(statusCode, body, offerData, count);
+        if (resp.error) {
+          return Promise.reject(resp.error);
         }
-  
-        // 2. make sure it's still available, i.e. the previous offer is identical to the current one
-        const offerData = this.parseOffer(authState.body);
-        if (offerData.id != this.savedSettings.lastOfferID) {
-          this.sendMessage("Offer has changed (prev/cur): " + this.savedSettings.lastOfferID + " / " + offerData.id);
-          return;
+        if (resp.shipping != 0) {
+          // try to turn off insurance first
+          return this.setNoInsurance(authState, offerData)
+            .then((statusCode, body, headers) => {
+              // revalidate
+              resp = this.validateCartResponse(statusCode, body, offerData, count);
+              if (resp.error) {
+                return Promise.reject(resp.error);
+              }
+              if (resp.shipping != 0) {
+                return Promise.reject("Non-zero shipping costs: " + resp.shipping)
+              }
+              // now checkout
+              return this.checkOut(authState, offerData);
+            });
         }
-        
-        // 3. [TODO] if no count figure out the minimum to ship
-        
-        // 4. submit the form (no shipping insurance)
-          // a. hit the "add to cart" link?
-          // b. POST tp change the number in the cart to N
-          // c. go to the submit page
-          // d. submit the order
 
-        // 5. validate the response somehow
-
-        this.sendMessage("TODO: implement buy");
-      });
+        return this.checkOut(authState, offerData);
+      }).then( (statusCode, body, headers) => {
+        // do checkout stuff
+      }).catch((e) => {
+        // something went wrong
+        this.sendMessage(e);
+      })
     },
 
     this.logError = async (message) => {
@@ -376,9 +422,12 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
     },
 
     this.parseOfferLink = (text) => {
+      if (!text) {
+        return null;
+      }
       // the offer id is the last part of the link minus the .html
       const parsed = url.parse(text);
-      const split=parsed.pathname.split('/');
+      const split = parsed.pathname.split('/');
       return split[split.length-1].split('.')[0];
     },
 
@@ -421,6 +470,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
           return; // we're paused
         }
       }
+
       this.fetchUrl("https://www.lastbottlewines.com")
         .then(({ statusCode, body, headers }) => {
           if (statusCode != 200) {
