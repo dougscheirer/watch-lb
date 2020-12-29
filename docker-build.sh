@@ -10,7 +10,8 @@ else
 fi
 
 # capture the git log to a file
-git log -n1 > ./git-head.txt
+echo "Branch: $(git branch --show-current)" > ./git-head.txt
+git log -n1 >> ./git-head.txt
 
 # now build it
 docker-compose build
