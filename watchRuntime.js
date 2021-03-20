@@ -31,11 +31,16 @@ function watchRuntime(telegramApi, redisApi, chatid) {
   if (!chatid) 
     chatid = process.env.CHAT_ID;
   
+  function formattedLog(message) {
+    // formatted console output
+    console.log(mjs().format() + ": " + message);
+  }
+  
   this.telegramApi = telegramApi,
     this.client = redisApi,
     this.chatid = chatid,
     this.getAsync = promisify(this.client.get).bind(this.client),
-    this.logger = console.log,
+    this.logger = formattedLog,
 
     this.runtimeSettings = {
       intervalTimer: null,
