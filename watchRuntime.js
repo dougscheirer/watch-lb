@@ -7,6 +7,7 @@ const redis = require("redis");
 const { promisify } = require('util');
 const durationParser = require('parse-duration');
 const fs = require('fs');
+const { type } = require('os');
 
 const DEFAULT_RATE = 15;
 
@@ -33,7 +34,11 @@ function watchRuntime(telegramApi, redisApi, chatid) {
   
   function formattedLog(message) {
     // formatted console output
-    console.log(mjs().format() + ": " + message);
+    let out = message;
+    if (type(out) == 'object') {
+      out = JSON.stringify(out, null, 2);
+    }
+    console.log(mjs().format() + ": " + out);
   }
   
   this.telegramApi = telegramApi,
