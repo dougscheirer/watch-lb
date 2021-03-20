@@ -35,7 +35,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
   function formattedLog(message) {
     // formatted console output
     let out = message;
-    if (type(out) == 'object') {
+    if (typeof(out) == 'object') {
       out = JSON.stringify(out, null, 2);
     }
     console.log(mjs().format() + ": " + out);
