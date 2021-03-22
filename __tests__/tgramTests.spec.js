@@ -43,20 +43,20 @@ function loadGoodTest() {
 
 function loadBadTest() {
   return loadWatcher(async (url) => {
-    // console.log("got a call for " + url);
-    return { statusCode: 200, body: 
-      "<html><head></head><body>Do not match stuff<h1 class=\"offer-name\">pizza</h1></body></html>", 
-      headers: [{ result: "pie" }] };
-  });
+      // console.log("got a call for " + url);
+      return { statusCode: 200, body: 
+        "<html><head></head><body>Do not match stuff<h1 class=\"offer-name\">pizza</h1></body></html>", 
+        headers: [{ result: "pie" }] };
+      });
 }
 
 function loadFetchError() {
   return loadWatcher(async (url) => {
-    // console.log("got a call for " + url);
-    return { statusCode: 404, body: null, headers: [{ result: "pie" }] };
-  });
-}
-
+      // console.log("got a call for " + url);
+      return { statusCode: 404, body: null, headers: [{ result: "pie" }] };
+    });
+  }
+  
 beforeEach(() => {
   sendMessages = [];
 });
@@ -80,7 +80,7 @@ test('sendMessage', (done) => {
 test('/now positive result', (done) => {
   return loadGoodTest().then(() => {
     api.testTextReceived('/now').then((res) => {
-      expect(sendMessages[0].message).toEqual("Found a match for cabernet in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com");
+      expect(sendMessages[0].message).toEqual("Found a match for cabernet ($89) in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com");
       expect(sendMessages.length).toEqual(1);
       done();
     });
@@ -100,7 +100,7 @@ test('/now near-duplicate no result', (done) => {
   return loadGoodTest().then(async () => {
     await watcher.checkWines();
     // should have a match message
-    expect(sendMessages[0].message).toEqual("Found a match for cabernet in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com")
+    expect(sendMessages[0].message).toEqual("Found a match for cabernet ($89) in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com")
     // modify the MD5 but leave the content the same
     watcher.savedSettings.lastMD5 = "";
     await watcher.checkWines();
@@ -124,7 +124,7 @@ test('/status', (done) => {
     await watcher.checkWines();
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\ngit: (.*)/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -137,7 +137,7 @@ test('/status with 0 start time', (done) => {
     watcher.runtimeSettings.startTime = new Date();
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: a few seconds\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: a few seconds\ngit: (.*)/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -150,7 +150,7 @@ test('/status with 5m start time', (done) => {
     watcher.runtimeSettings.startTime = new Date(new Date() - 5*60*1000);
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: 5 minutes\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: 5 minutes\ngit: (.*)/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -163,7 +163,7 @@ test('/status paused forever', (done) => {
     await api.testTextReceived('/pause');
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until forever/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until forever/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -176,7 +176,7 @@ test('/status paused for a while', (done) => {
     await api.testTextReceived('/pause 15d');
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until /;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until /;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();

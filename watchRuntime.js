@@ -1,5 +1,5 @@
 require('dotenv').config();
-const curl = new (require('curl-request'))();
+const curl = require('curl-request');
 const parser = require('node-html-parser');
 const crypto = require('crypto');
 const mjs = require('moment');
@@ -7,7 +7,8 @@ const redis = require("redis");
 const { promisify } = require('util');
 const durationParser = require('parse-duration');
 const fs = require('fs');
-const { type } = require('os');
+const url = require('url');
+const { openStdin } = require('process');
 
 const DEFAULT_RATE = 15;
 
@@ -24,7 +25,9 @@ const matching_default = [
   "les ormes",
   "petit"];
 
-function watchRuntime(telegramApi, redisApi, chatid) {
+const siteroot = "https://www.lastbottlewines.com/";
+
+function watchRuntime(telegramApi, redisApi, chatid, auth) {
   if (!telegramApi)
     throw new Error("telegramApi is required");
   if (!redisApi)
@@ -32,15 +35,15 @@ function watchRuntime(telegramApi, redisApi, chatid) {
   if (!chatid) 
     chatid = process.env.CHAT_ID;
   
-  function formattedLog(message) {
-    // formatted console output
-    let out = message;
-    if (typeof(out) == 'object') {
-      out = JSON.stringify(out, null, 2);
+    function formattedLog(message) {
+      // formatted console output
+      let out = message;
+      if (typeof(out) == 'object') {
+        out = JSON.stringify(out, null, 2);
+      }
+      console.log(mjs().format() + ": " + out);
     }
-    console.log(mjs().format() + ": " + out);
-  }
-  
+
   this.telegramApi = telegramApi,
     this.client = redisApi,
     this.chatid = chatid,
@@ -55,8 +58,10 @@ function watchRuntime(telegramApi, redisApi, chatid) {
     this.savedSettings = {
       lastMD5: null,
       lastMD5Update: null,
+      lastOfferID: null,
       lastMessage: null,
       lastIntervalUpdate: null,
+      lastMatch: null,
       sent24hrMessage: false,
       matching: matching_default.slice(),
       defaultRate: null,
@@ -97,6 +102,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       if (this.savedSettings.lastMD5Update != null) {
         msgResp = "Last check at " + this.savedSettings.lastIntervalUpdate + "\n";
         msgResp += "Last difference at " + this.savedSettings.lastMD5Update + " (" + duration.humanize() + ")\n";
+        msgResp += "Last offer ID: " + this.savedSettings.lastOfferID + "\n";
       }
       msgResp += "Current interval: " + mjs.duration(this.savedSettings.defaultRate * 1000 * 60).humanize() + "\n";
       msgResp += "Service uptime: " + mjs.duration(new Date() - this.runtimeSettings.startTime).humanize();
@@ -130,6 +136,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       // invalidate the MD5 cache
       this.savedSettings.lastMD5 = null;
       this.savedSettings.lastMD5Update = null;
+      this.savedSettings.lastOfferID = null;
       // write to redis
       this.saveSettings();
       this.checkWines(true);
@@ -149,6 +156,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       // invalidate the MD5 cache
       this.savedSettings.lastMD5 = null;
       this.savedSettings.lastMD5Update = null;
+      this.savedSettings.lastOfferID = null;
       // write to redis
       this.saveSettings();
       this.checkWines(true);
@@ -222,7 +230,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
     this.handleSettings = (msg) => {
       this.sendMessage(JSON.stringify(this.savedSettings));
     },
-    
+
     this.logError = async (message) => {
       this.logger("ERROR >>>");
       this.logger(message);
@@ -234,9 +242,44 @@ function watchRuntime(telegramApi, redisApi, chatid) {
       return telegramApi.sendMessage(this.chatid, message);
     },
 
-    // allow for fetchUrl to be overridden in test mode
-    this.fetchUrl = (url) => {
-      return curl.get(url);
+    // allow for fetchUrl and postUrl to be overridden in test mode
+    this.fetchUrl = (url, headers) => {
+      var fetch = new curl();
+      if (headers) {
+        fetch.setHeaders(headers);
+      }
+      return fetch.get(url);
+    },
+
+    this.parseOfferLink = (text) => {
+      if (!text) {
+        return null;
+      }
+      // the offer id is the last part of the link minus the .html
+      const parsed = url.parse(text);
+      const split = parsed.pathname.split('/');
+      return split[split.length-1].split('.')[0];
+    },
+
+    this.parseOffer = (body) => {
+      const root = parser.parse(body);
+
+      const offerName = root.querySelector(".offer-name");
+      const offerPrice= root.querySelector(".amount.lb");
+      var offerLink = null;
+      const purchase = root.querySelector(".purchase-it");
+      if (purchase) {
+        const offer = purchase.querySelector("a");
+        offerLink = offer ? offer.getAttribute('href') : null;
+      }
+      const md5 = crypto.createHash('md5').update(body).digest("hex");
+      const rawText = (text) => { return (text && text.rawText ? text.rawText : null );}
+      return { name: offerName.rawText, 
+        price: rawText(offerPrice), 
+        link: offerLink, 
+        id: this.parseOfferLink(offerLink), 
+        md5: md5
+      };
     },
 
     this.checkWines = (reportNothing) => {
@@ -257,6 +300,7 @@ function watchRuntime(telegramApi, redisApi, chatid) {
           return; // we're paused
         }
       }
+      
       this.fetchUrl("https://www.lastbottlewines.com")
         .then(({ statusCode, body, headers }) => {
           if (statusCode != 200) {
@@ -265,17 +309,17 @@ function watchRuntime(telegramApi, redisApi, chatid) {
           }
 
           // parse the body and look for the offer-name class
-          const root = parser.parse(body);
           // catch parse errors?  I think those just end up as roots with no data
-          const offerName = root.querySelector(".offer-name");
-          if (!offerName) {
+          const offerData = this.parseOffer(body);
+
+          if (!offerData.name) {
             this.logError("offer-name class not found, perhaps the page formatting has changed or there was a page load error");
             return;
           }
 
           // write hash to a local FS to tell when page has changed?
-          const hash = crypto.createHash('md5').update(body).digest("hex");
-          if (!reportNothing && hash == this.savedSettings.lastMD5) {
+          // TODO: compare the offerID instead?
+          if (!reportNothing && offerData.md5 == this.savedSettings.lastMD5) {
             this.logger("No changes since last update");
             if (this.savedSettings.lastMD5Update != null) {
               this.logger("Time since last change: " + ((new Date()) - this.savedSettings.lastMD5Update));
@@ -291,15 +335,19 @@ function watchRuntime(telegramApi, redisApi, chatid) {
 
           // remember the MD5 and if we have sent our message
           this.savedSettings.sent24hrMessage = false;
-          this.savedSettings.lastMD5 = hash;
+          this.savedSettings.lastMD5 = offerData.md5;
           this.savedSettings.lastMD5Update = new Date();
+          this.savedSettings.lastOfferID = offerData.id;
           this.saveSettings();
 
           for (var name in this.savedSettings.matching) {
             if (body.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
               const that = this;
+              // remember the offer name for verification check on /buy
+              this.savedSettings.lastMatch = offerData.name;
+              this.saveSettings();
               // format the message and compare to the last one, if they are identical just skip it
-              const msg = "Found a match for " + this.savedSettings.matching[name] + " in " + offerName.rawText + "\nhttps://lastbottlewines.com";
+              const msg = "Found a match for " + this.savedSettings.matching[name] + " ($" + offerData.price + ") in " + offerData.name + "\nhttps://lastbottlewines.com";
               if (msg != this.savedSettings.lastMessage) {
                 this.sendMessage(msg)
                   .then(function (data) {
@@ -316,8 +364,8 @@ function watchRuntime(telegramApi, redisApi, chatid) {
             }
           }
           if (!!reportNothing)
-            this.sendMessage("No matching terms in '" + offerName.rawText + "'");
-            this.logger("No matching terms for '" + offerName.rawText + "'");
+            this.sendMessage("No matching terms in '" + offerData.name + "'");
+            this.logger("No matching terms for '" + offerData.name + "'");
         })
         .catch((e) => {
           this.logger(e);
@@ -369,7 +417,6 @@ function watchRuntime(telegramApi, redisApi, chatid) {
 
   
   // load up all of the text processors
-
   // /start
   telegramApi.onText(/\/start$/, this.handleStart);
   // /list
