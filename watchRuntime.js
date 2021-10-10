@@ -59,6 +59,8 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       lastMD5: null,
       lastMD5Update: null,
       lastOfferID: null,
+      lastOfferName : "",
+      lastOfferPrice: 0,
       lastMessage: null,
       lastIntervalUpdate: null,
       lastMatch: null,
@@ -102,7 +104,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       if (this.savedSettings.lastMD5Update != null) {
         msgResp = "Last check at " + this.savedSettings.lastIntervalUpdate + "\n";
         msgResp += "Last difference at " + this.savedSettings.lastMD5Update + " (" + duration.humanize() + ")\n";
-        msgResp += "Last offer ID: " + this.savedSettings.lastOfferID + "\n";
+        msgResp += "Last offer: (" + this.savedSettings.lastOfferID + ") " + this.savedSettings.lastOfferName + " $" + this.savedSettings.lastOfferPrice + "\n";
       }
       msgResp += "Current interval: " + mjs.duration(this.savedSettings.defaultRate * 1000 * 60).humanize() + "\n";
       msgResp += "Service uptime: " + mjs.duration(new Date() - this.runtimeSettings.startTime).humanize();
@@ -137,6 +139,8 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       this.savedSettings.lastMD5 = null;
       this.savedSettings.lastMD5Update = null;
       this.savedSettings.lastOfferID = null;
+      this.savedSettings.lastOfferName = "";
+      this.savedSettings.lastOfferPrice = 0;
       // write to redis
       this.saveSettings();
       this.checkWines(true);
@@ -157,6 +161,8 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       this.savedSettings.lastMD5 = null;
       this.savedSettings.lastMD5Update = null;
       this.savedSettings.lastOfferID = null;
+      this.savedSettings.lastOfferName = "";
+      this.savedSettings.lastOfferPrice = 0;
       // write to redis
       this.saveSettings();
       this.checkWines(true);
@@ -338,6 +344,9 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
           this.savedSettings.lastMD5 = offerData.md5;
           this.savedSettings.lastMD5Update = new Date();
           this.savedSettings.lastOfferID = offerData.id;
+          this.savedSettings.lastOfferName = offerData.name;
+          this.savedSettings.lastOfferPrice = offerData.price;
+    
           this.saveSettings();
 
           for (var name in this.savedSettings.matching) {

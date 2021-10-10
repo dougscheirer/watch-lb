@@ -124,7 +124,8 @@ test('/status', (done) => {
     await watcher.checkWines();
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: (.*) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: (.*)\ngit: (.*)/;
+    console.log(sendMessages[0].message);
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -137,7 +138,7 @@ test('/status with 0 start time', (done) => {
     watcher.runtimeSettings.startTime = new Date();
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: a few seconds\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: (.*) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: a few seconds\ngit: (.*)/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -150,7 +151,7 @@ test('/status with 5m start time', (done) => {
     watcher.runtimeSettings.startTime = new Date(new Date() - 5*60*1000);
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: 5 minutes\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: (.*) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: 5 minutes\ngit: (.*)/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -163,7 +164,7 @@ test('/status paused forever', (done) => {
     await api.testTextReceived('/pause');
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until forever/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: (.*) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until forever/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -176,7 +177,7 @@ test('/status paused for a while', (done) => {
     await api.testTextReceived('/pause 15d');
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer ID: (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until /;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: (.*) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until /;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
