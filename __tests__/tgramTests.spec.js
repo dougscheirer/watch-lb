@@ -125,7 +125,7 @@ test('/status', (done) => {
     sendMessages=[];
     await api.testTextReceived('/status');
     const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: (.*) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: (.*)\ngit: (.*)/;
-    console.log(sendMessages[0].message);
+    // console.log(sendMessages[0].message);
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -341,6 +341,33 @@ test('/pause 2 weeks', (done) => {
     api.testTextReceived('/resume');
     const regex3=/Resuming with check interval of/;
     expect(regex3.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
+test('/pause and reload', (done) => {
+  return loadGoodTest().then(async () => {
+    await api.testTextReceived('/pause 2 weeks');
+    const regex=/Pausing until/;
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // make sure it will not check
+    sendMessages=[];
+    watcher.checkWines(true);
+    const regex2=/Paused, will resume on/;
+    expect(regex2.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // reload
+    watcher.loadSettings(false);
+    sendMessages=[];
+    watcher.checkWines(true);
+    sendMessages=[];
+    await api.testTextReceived('/status');
+    const regex3=/Never checked\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until /;
+    console.log(sendMessages[0].message);
+    expect(regex3.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages[0].message.includes("forever") == false).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
   });

@@ -110,7 +110,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       msgResp += "Service uptime: " + mjs.duration(new Date() - this.runtimeSettings.startTime).humanize();
       try {
         if (this.savedSettings.pauseUntil != -1) {
-         msgResp += "\nPaused until " + ((this.savedSettings.pauseUntil > 0) ? this.savedSettings.pauseUntil : "forever");
+         msgResp += "\nPaused until " + ((this.savedSettings.pauseUntil == 0) ? "forever" : this.savedSettings.pauseUntil);
        }
       } catch (e) {
         this.logger(e);
