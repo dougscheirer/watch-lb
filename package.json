@@ -17,10 +17,10 @@
     "node-html-parser": "^1.2.20",
     "node-telegram-bot-api": "^0.50.0",
     "parse-duration": "^0.4.4",
-    "redis": "^3.0.2"
+    "redis": "^3.1.2"
   },
   "devDependencies": {
-    "eslint": "^6.8.0",
+    "eslint": "^8.3.0",
     "jest": "^26.1.0",
     "redis-mock": "^0.47.0"
   },
