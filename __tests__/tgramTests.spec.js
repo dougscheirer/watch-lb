@@ -2,6 +2,7 @@ const { watchRuntime } = require('../watchRuntime');
 const redis = require("redis-mock");
 const fs = require('fs');
 const tgramMock = require('../__mocks__/tgramMock');
+const { syncBuiltinESMExports } = require('module');
 
 var sendMessages = [];
 var watcher = null;
@@ -346,6 +347,32 @@ test('/pause 2 weeks', (done) => {
   });
 });
 
+test('/pause and wait for unpause', (done) => {
+  return loadGoodTest().then(async () => {
+    await api.testTextReceived('/pause 1 seconds');
+    const regex=/Pausing until/;
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // make sure it will not check
+    sendMessages=[];
+    watcher.checkWines(true);
+    const regex2=/Paused, will resume on/;
+    expect(regex2.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // advance clock
+    setTimeout(async () => {
+      sendMessages=[];
+      watcher.checkWines(true);
+      await api.testTextReceived('/status');
+      const regex3=/Never checked\nCurrent interval: 15 minutes\nService uptime: (.*)\ngit: /;
+      expect(regex3.test(sendMessages[0].message)).toBeTruthy();
+      expect(sendMessages[0].message.includes("forever") == false).toBeTruthy();
+      expect(sendMessages.length).toEqual(2);
+      done();
+    }, 1500);
+  });
+});
+
 test('/pause and reload', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/pause 2 weeks');
@@ -365,7 +392,6 @@ test('/pause and reload', (done) => {
     sendMessages=[];
     await api.testTextReceived('/status');
     const regex3=/Never checked\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until /;
-    console.log(sendMessages[0].message);
     expect(regex3.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages[0].message.includes("forever") == false).toBeTruthy();
     expect(sendMessages.length).toEqual(1);

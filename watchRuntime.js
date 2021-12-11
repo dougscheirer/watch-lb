@@ -67,7 +67,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       sent24hrMessage: false,
       matching: matching_default.slice(),
       defaultRate: null,
-      pauseUntil: -1,
+      pauseUntil: -1, // -1 is not paused, 0 is forever, other is a Date()
     },
 
     this.saveSettings = () => {
@@ -403,7 +403,8 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
           // manually upconvert known Dates
           this.savedSettings.lastMD5Update = (this.savedSettings.lastMD5Update == null) ? null : new Date(this.savedSettings.lastMD5Update);
           this.savedSettings.lastIntervalUpdate = (this.savedSettings.lastIntervalUpdate == null) ? null : new Date(this.savedSettings.lastIntervalUpdate);
-        }
+          this.savedSettings.pauseUntil = (this.savedSettings.pauseUntil == -1) ? -1 : this.savedSettings.pauseUntil == 0 ? 0 : new Date(this.savedSettings.pauseUntil);
+	}
 
         this.logger("Settings:");
         this.logger(this.savedSettings);

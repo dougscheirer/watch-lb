@@ -119,3 +119,17 @@ test('changing pause saves', (done) => {
   })
 });
 
+test('changing pause saves correcly', (done) => {
+  return loadGoodTest().then(async () => {
+    await api.testTextReceived('/pause 5s');
+    // verify that redis has the data
+    var settings = await getAsync('watch-lb-settings');
+    var settingObject = JSON.parse(settings);
+    var settings2 = await getAsync('watch-lb-settings');
+    var settingObject2 = JSON.parse(settings2);
+    console.log(settingObject);
+    console.log(settingObject2);
+    expect(settingObject.pauseUntil).toEqual(settingObject2.pauseUntil);
+    done();
+  })
+});
