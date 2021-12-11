@@ -104,32 +104,22 @@ test('changing uptick saves', (done) => {
   })
 });
 
-test('changing pause saves', (done) => {
+test('loading settings is identical', (done) => {
   return loadGoodTest().then(async () => {
-    await api.testTextReceived('/pause');
-    // verify that redis has the data
-    var settings = await getAsync('watch-lb-settings');
-    var settingObject = JSON.parse(settings);
-    expect(settingObject.pauseUntil).toBe(0);
-    await api.testTextReceived('/resume');
-    var settings = await getAsync('watch-lb-settings');
-    var settingObject = JSON.parse(settings);
-    expect(settingObject.pauseUntil).toBe(-1);    
-    done();
-  })
-});
-
-test('changing pause saves correcly', (done) => {
-  return loadGoodTest().then(async () => {
+    // ran into this while debugging pause, but it
+    // could happen for anything that does not convert
+    // back and forth from object -> string -> object
+    // in the loading process
     await api.testTextReceived('/pause 5s');
-    // verify that redis has the data
-    var settings = await getAsync('watch-lb-settings');
-    var settingObject = JSON.parse(settings);
-    var settings2 = await getAsync('watch-lb-settings');
-    var settingObject2 = JSON.parse(settings2);
-    console.log(settingObject);
-    console.log(settingObject2);
-    expect(settingObject.pauseUntil).toEqual(settingObject2.pauseUntil);
+    // clone the set data
+    var settingObject = {...watcher.savedSettings};
+    // reload
+    await watcher.loadSettings(false);
+    var settingObject2 = watcher.savedSettings;
+    for (e in settingObject) {
+      // console.log("matching " + e);
+      expect(e + " is " + settingObject[e]).toEqual(e + " is " + settingObject2[e]);
+    }
     done();
   })
 });

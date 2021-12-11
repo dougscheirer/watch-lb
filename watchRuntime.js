@@ -55,19 +55,20 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       startTime: new Date()
     },
 
+    // Note: Date objects must be converted from strings in loadSettings() (and add to the test in persistenceTests)
     this.savedSettings = {
       lastMD5: null,
-      lastMD5Update: null,
+      lastMD5Update: null,  // Date
       lastOfferID: null,
       lastOfferName : "",
       lastOfferPrice: 0,
       lastMessage: null,
-      lastIntervalUpdate: null,
+      lastIntervalUpdate: null, // Date
       lastMatch: null,
       sent24hrMessage: false,
       matching: matching_default.slice(),
       defaultRate: null,
-      pauseUntil: -1, // -1 is not paused, 0 is forever, other is a Date()
+      pauseUntil: -1, // -1 is not paused, 0 is forever, other is a Date
     },
 
     this.saveSettings = () => {
@@ -404,7 +405,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
           this.savedSettings.lastMD5Update = (this.savedSettings.lastMD5Update == null) ? null : new Date(this.savedSettings.lastMD5Update);
           this.savedSettings.lastIntervalUpdate = (this.savedSettings.lastIntervalUpdate == null) ? null : new Date(this.savedSettings.lastIntervalUpdate);
           this.savedSettings.pauseUntil = (this.savedSettings.pauseUntil == -1) ? -1 : this.savedSettings.pauseUntil == 0 ? 0 : new Date(this.savedSettings.pauseUntil);
-	}
+	      }
 
         this.logger("Settings:");
         this.logger(this.savedSettings);
