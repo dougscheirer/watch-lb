@@ -3,20 +3,27 @@ const redis = require("redis-mock");
 const fs = require('fs');
 const tgramMock = require('../__mocks__/tgramMock');
 const { syncBuiltinESMExports } = require('module');
+const MockDate = require("mockdate");
+const durationParser = require("parse-duration");
 
 var sendMessages = [];
 var watcher = null;
 var api = null;
+// for use elsewhere
+const adate = "03/16/2020";
+const posMatch =  "Found a match for cabernet ($89) in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com";
 
 function logCapture() {
   // don't spit out watcher messages
 }
 
 function initWatcher() {
+  MockDate.set(adate);
   api = new tgramMock(
           "chatid", 
           function (chatid, msg) { sendMessages.push({ chatid: chatid, message: msg }); },
-          { onlyFirstMatch: true });
+          { onlyFirstMatch: true },
+  );
   client = redis.createClient();
   // clean redis
   client.del('watch-lb-settings');
@@ -81,7 +88,7 @@ test('sendMessage', (done) => {
 test('/now positive result', (done) => {
   return loadGoodTest().then(() => {
     api.testTextReceived('/now').then((res) => {
-      expect(sendMessages[0].message).toEqual("Found a match for cabernet ($89) in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com");
+      expect(sendMessages[0].message).toEqual(posMatch);
       expect(sendMessages.length).toEqual(1);
       done();
     });
@@ -101,7 +108,7 @@ test('/now near-duplicate no result', (done) => {
   return loadGoodTest().then(async () => {
     await watcher.checkWines();
     // should have a match message
-    expect(sendMessages[0].message).toEqual("Found a match for cabernet ($89) in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com")
+    expect(sendMessages[0].message).toEqual(posMatch);
     // modify the MD5 but leave the content the same
     watcher.savedSettings.lastMD5 = "";
     await watcher.checkWines();
@@ -325,7 +332,7 @@ test('/pause', (done) => {
   });
 });
 
-test('/pause 2 weeks', (done) => {
+test('/pause 2 weeks and resume', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/pause 2 weeks');
     const regex=/Pausing until/;
@@ -347,29 +354,90 @@ test('/pause 2 weeks', (done) => {
   });
 });
 
-test('/pause and wait for unpause', (done) => {
+test('/pause 2 weeks', (done) => {
   return loadGoodTest().then(async () => {
-    await api.testTextReceived('/pause 1 seconds');
+    await api.testTextReceived('/pause 2 weeks');
     const regex=/Pausing until/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     // make sure it will not check
     sendMessages=[];
-    watcher.checkWines(true);
+    await watcher.checkWines(true);
     const regex2=/Paused, will resume on/;
     expect(regex2.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
-    // advance clock
-    setTimeout(async () => {
-      sendMessages=[];
-      watcher.checkWines(true);
-      await api.testTextReceived('/status');
-      const regex3=/Never checked\nCurrent interval: 15 minutes\nService uptime: (.*)\ngit: /;
-      expect(regex3.test(sendMessages[0].message)).toBeTruthy();
-      expect(sendMessages[0].message.includes("forever") == false).toBeTruthy();
-      expect(sendMessages.length).toEqual(2);
-      done();
-    }, 1500);
+    // advance clock >2 weeks
+    MockDate.set(new Date(adate).getTime() + durationParser("2 weeks") + durationParser("1 minute"));
+    sendMessages=[];
+    await watcher.checkWines(true);
+    expect(sendMessages[0].message).toEqual(posMatch);
+    expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
+test('/pause 1 day with datestamp', (done) => {
+  return loadGoodTest().then(async () => {
+    const now = new Date();
+    const dateString = (now.getMonth()+1) + '/' + (now.getDate()+1) + '/' + now.getFullYear();
+    await api.testTextReceived('/pause ' + dateString);
+    const regex=/Pausing until/;
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // make sure it will not check
+    sendMessages=[];
+    await watcher.checkWines(true);
+    const regex2=/Paused, will resume on/;
+    expect(regex2.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // advance clock >1 day
+    MockDate.set(new Date(adate).getTime() + durationParser("1 day") + durationParser("1 minute"));
+    sendMessages=[];
+    await watcher.checkWines(true);
+    expect(sendMessages[0].message).toEqual(posMatch);
+    expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
+test('/pause 1 hour with timestamp', (done) => {
+  return loadGoodTest().then(async () => {
+    const now = new Date();
+    const dateString = (now.getMonth()+1) + '/' + (now.getDate()+1) + '/' + now.getFullYear();
+    await api.testTextReceived('/pause ' + dateString);
+    const regex=/Pausing until/;
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // make sure it will not check
+    sendMessages=[];
+    await watcher.checkWines(true);
+    const regex2=/Paused, will resume on/;
+    expect(regex2.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // advance clock >1 day
+    MockDate.set(new Date(adate).getTime() + durationParser("1 day") + durationParser("1 minute"));
+    sendMessages=[];
+    await watcher.checkWines(true);
+    expect(sendMessages[0].message).toEqual(posMatch);
+    expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
+test('/pause with unparsable', (done) => {
+  return loadGoodTest().then(async () => {
+    const now = new Date();
+    const dateString = " no idea";
+    await api.testTextReceived('/pause ' + dateString);
+    const regex=new RegExp('Unrecognized pause argument');
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // make sure it will still check
+    sendMessages=[];
+    await watcher.checkWines(true);
+    expect(sendMessages[0].message).toEqual(posMatch);
+    expect(sendMessages.length).toEqual(1);
+    done();
   });
 });
 

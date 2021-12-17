@@ -9,6 +9,7 @@ const durationParser = require('parse-duration');
 const fs = require('fs');
 const url = require('url');
 const { openStdin } = require('process');
+const { isDuration } = require('moment');
 
 const DEFAULT_RATE = 15;
 
@@ -55,7 +56,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       startTime: new Date()
     },
 
-    // Note: Date objects must be converted from strings in loadSettings() (and add to the test in persistenceTests)
+    // Note: Date and other non-string objects must be converted from strings in loadSettings()
     this.savedSettings = {
       lastMD5: null,
       lastMD5Update: null,  // Date
@@ -206,22 +207,39 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
     },
 
     this.handlePause = (msg, match) => {
-      var until = 0;
+      var duration = null;
+      var datestamp = null;
+      var timestamp = null;
+      var until = null;
       if (match.length == 1) {
         // just pause, no end time
+        until = 0;
       } else {
+        // try to parse duration
         // if only numbers, then assume it's in minutes
         const reg = /^\d+$/;
         if (reg.test(match[1])) {
-          until = parseInt(match[1]) * 60 * 1000;
+          duration = parseInt(match[1]) * 60 * 1000;
         } else {
           // try to parse a duration string (comes out in ms) and convert to minutes
-          until = durationParser(match[1]);
+          duration = durationParser(match[1]);
+          // try to parse datestamp (12/1/2020)
+          datestamp = new Date(match[1]);
+          // try to parse timestamp (12:00)
+          timestamp = mjs(match[1],"HH:mm");
         }
-      }
-      // write the until time as 0 (forever) or a datestamp
-      if (until > 0) {
-        until = new Date((new Date()).getTime() + until);
+        // write the until time as 0 (forever) or a datestamp
+        if (duration > 0) {
+          until = new Date((new Date()).getTime() + duration);
+        } else if (datestamp != null && !isNaN(datestamp.valueOf())) {
+          until = new Date(datestamp);
+        } else if (timestamp != null && timestamp.isValid()) {
+          until = new Date(timestamp);
+        } else {
+          // garbage in, fail
+          this.sendMessage("Unrecognized pause argument");
+          return;
+        }
       }
       this.savedSettings.pauseUntil = until;
       this.saveSettings();
@@ -289,7 +307,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       };
     },
 
-    this.checkWines = (reportNothing) => {
+    this.checkWines = async (reportNothing) => {
       this.savedSettings.lastIntervalUpdate = new Date();
       if (this.savedSettings.pauseUntil == 0) {
         if (reportNothing) {
