@@ -442,7 +442,14 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
     this.logStartTime = () => {
       this.runtimeSettings.startTime = new Date();
       this.saveSettings();
+    },
+
+    // shutdown
+    this.stop = () => {
+      this.sendMessage("Watcher is shutting down");
+      clearInterval(this.runtimeSettings.intervalTimer);
     };
+
 
   
   // load up all of the text processors
@@ -486,6 +493,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
   telegramApi.onText(/\/*/, () => {
     this.sendMessage("Unknown command");
   })
+
 }
 
 exports.watchRuntime = watchRuntime;

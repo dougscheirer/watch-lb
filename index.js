@@ -21,11 +21,23 @@ watcher.loadSettings().then((res) => {
   if (os.uptime() < 5 * 60) {
     watcher.sendMessage("Looks like the system just restarted, uptime is " + os.uptime());
   }
-
+  
   // note that we're starting up?
   watcher.logStartTime();
 
   // just in case, always run an initial check.  with all of the cacheing we're doing, 
   // we should not be over-communicating
   watcher.checkWines();
+});
+
+var signals = {
+  'SIGINT': 2,
+  'SIGTERM': 15
+};
+
+
+Object.keys(signals).forEach(function (signal) {
+  process.on(signal, function () {
+    watcher.stop();
+  });
 });
