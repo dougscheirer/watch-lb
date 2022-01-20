@@ -30,11 +30,11 @@ watcher.loadSettings().then((res) => {
   watcher.checkWines();
 });
 
+// catch TERM and INT to gracefully stop the svc
 var signals = {
   'SIGINT': 2,
   'SIGTERM': 15
 };
-
 
 Object.keys(signals).forEach(function (signal) {
   process.on(signal, function () {
