@@ -283,7 +283,9 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       // the offer id is the last part of the link minus the .html
       const parsed = url.parse(text);
       const split = parsed.pathname.split('/');
-      return split[split.length-1].split('.')[0];
+      return (split[split.length-1] == '') ? 
+        split[split.length-2] : 
+        split[split.length-1].split('.')[0];
     },
 
     this.parseOffer = (body) => {

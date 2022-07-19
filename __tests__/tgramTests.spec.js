@@ -37,16 +37,20 @@ function loadWatcher(fetchFunc) {
   return watcher.loadSettings(false);
 }
 
-function loadGoodTest() {
+function loadTest(fname) {
   return loadWatcher(async (url) => {
     var body;
     try {
-      body = fs.readFileSync("./testdata/good.html").toString();
+      body = fs.readFileSync(fname).toString();
     } catch (e) { 
       console.log("error:" + e); 
     }
     return { statusCode: 200, body: body, headers: [{ result: "pie" }] };
   });
+}
+
+function loadGoodTest() {
+  return loadTest("./testdata/good.html");
 }
 
 function loadBadTest() {
@@ -132,7 +136,7 @@ test('/status', (done) => {
     await watcher.checkWines();
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: (.*) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: (.*)\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: \(LB8212\) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: (.*)\ngit: (.*)/;
     // console.log(sendMessages[0].message);
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
@@ -146,7 +150,7 @@ test('/status with 0 start time', (done) => {
     watcher.runtimeSettings.startTime = new Date();
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: (.*) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: a few seconds\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: \(LB8212\) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: a few seconds\ngit: (.*)/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -159,7 +163,7 @@ test('/status with 5m start time', (done) => {
     watcher.runtimeSettings.startTime = new Date(new Date() - 5*60*1000);
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: (.*) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: 5 minutes\ngit: (.*)/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: \(LB8212\) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: 5 minutes\ngit: (.*)/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -172,7 +176,7 @@ test('/status paused forever', (done) => {
     await api.testTextReceived('/pause');
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: (.*) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until forever/;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: \(LB8212\) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until forever/;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -185,7 +189,7 @@ test('/status paused for a while', (done) => {
     await api.testTextReceived('/pause 15d');
     sendMessages=[];
     await api.testTextReceived('/status');
-    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: (.*) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until /;
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: \(LB8212\) Groth Oakville Cabernet Sauvignon Reserve 2015 \$89\nCurrent interval: 15 minutes\nService uptime: (.*)\nPaused until /;
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
@@ -486,6 +490,19 @@ test('/badcmd', (done) => {
     await api.testTextReceived('/badcmd');
     expect(sendMessages.length).toEqual(1);
     expect(sendMessages[0].message).toEqual("Unknown command");
+    done();
+  });
+});
+
+test('updated page test', (done) => {
+  return loadTest("./testdata/updated-purchase.html").then(async () => {
+    await watcher.checkWines();
+    sendMessages=[];
+    await api.testTextReceived('/status');
+    const regex=/Last check at (.*)\nLast difference at (.*)\nLast offer: \(LB3FAARE\) Beau Vigne Old Rutherford Cabernet Sauvignon Napa Valley 2019 \$49\nCurrent interval: 15 minutes\nService uptime: (.*)\n/;
+    console.log(sendMessages[0].message);
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
     done();
   });
 });
