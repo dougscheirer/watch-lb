@@ -11,7 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "curl-request": "^1.1.1",
+    "axios": "^0.27.2",
     "dotenv": "^8.2.0",
     "moment": "^2.27.0",
     "node-html-parser": "^1.2.20",

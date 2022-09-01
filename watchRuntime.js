@@ -1,5 +1,5 @@
 require('dotenv').config();
-const curl = require('curl-request');
+const curl = require('axios');
 const parser = require('node-html-parser');
 const crypto = require('crypto');
 const mjs = require('moment');
@@ -10,6 +10,7 @@ const fs = require('fs');
 const url = require('url');
 const { openStdin } = require('process');
 const { isDuration } = require('moment');
+const { default: axios } = require('axios');
 
 const DEFAULT_RATE = 15;
 
@@ -107,6 +108,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
         msgResp = "Last check at " + this.savedSettings.lastIntervalUpdate + "\n";
         msgResp += "Last difference at " + this.savedSettings.lastMD5Update + " (" + duration.humanize() + ")\n";
         msgResp += "Last offer: (" + this.savedSettings.lastOfferID + ") " + this.savedSettings.lastOfferName + " $" + this.savedSettings.lastOfferPrice + "\n";
+        msgResp += "Last MD5: " + this.savedSettings.lastMD5 + "\n";
       }
       msgResp += "Current interval: " + mjs.duration(this.savedSettings.defaultRate * 1000 * 60).humanize() + "\n";
       msgResp += "Service uptime: " + mjs.duration(new Date() - this.runtimeSettings.startTime).humanize();
@@ -269,11 +271,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
 
     // allow for fetchUrl and postUrl to be overridden in test mode
     this.fetchUrl = (url, headers) => {
-      var fetch = new curl();
-      if (headers) {
-        fetch.setHeaders(headers);
-      }
-      return fetch.get(url);
+      return axios.get(url, headers);
     },
 
     this.parseOfferLink = (text) => {
