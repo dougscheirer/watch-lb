@@ -22,8 +22,12 @@ function initWatcher() {
     { onlyFirstMatch: true });
   client = redis.createClient();
   getAsync = promisify(client.get).bind(client),
-  watcher = new watchRuntime(api, client, "chatid");
-  watcher.logger = logCapture;
+  watcher = new watchRuntime({
+    telegramApi: api, 
+    redisApi: client, 
+    chatid: "chatid",
+    logger: logCapture,
+    errorLogger: logCapture});
 }
 
 function loadWatcher(fetchFunc) {
@@ -40,14 +44,14 @@ function loadGoodTest() {
     } catch (e) { 
       console.log("error:" + e); 
     }
-    return { statusCode: 200, body: body, headers: [{ result: "pie" }] };
+    return { statusCode: 200, data: body, headers: [{ result: "pie" }] };
   });
 }
 
 function loadBadTest() {
   return loadWatcher(async (url) => {
     // console.log("got a call for " + url);
-    return { statusCode: 200, body: 
+    return { statusCode: 200, data: 
       "<html><head></head><body>Do not match stuff<h1 class=\"offer-name\">pizza</h1></body></html>", 
       headers: [{ result: "pie" }] };
   });
@@ -56,7 +60,7 @@ function loadBadTest() {
 function loadFetchError() {
   return loadWatcher(async (url) => {
     // console.log("got a call for " + url);
-    return { statusCode: 404, body: null, headers: [{ result: "pie" }] };
+    return { statusCode: 404, data: null, headers: [{ result: "pie" }] };
   });
 }
 

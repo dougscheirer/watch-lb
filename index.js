@@ -13,7 +13,10 @@ const client = redis.createClient(opts);
 const api = new telegram(process.env.API_TOKEN, { polling: true, onlyFirstMatch: true });
 
 // now create our runtime
-const watcher = new watchRuntime(api, client, process.env.CHAT_ID);
+const watcher = new watchRuntime({ 
+  telegramApi: api, 
+  redisApi: client, 
+  chatid: process.env.CHAT_ID});
 
 // load and run
 watcher.loadSettings().then((res) => {

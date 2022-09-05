@@ -19,7 +19,7 @@ function logCapture() {
   // don't spit out watcher messages
 }
 
-function initWatcher() {
+function initWatcher(fetchFunc) {
   MockDate.set(adate);
   api = new tgramMock(
           "chatid", 
@@ -29,13 +29,16 @@ function initWatcher() {
   client = redis.createClient();
   // clean redis
   client.del('watch-lb-settings');
-  watcher = new watchRuntime(api, client, "chatid");
+  watcher = new watchRuntime({
+    telegramApi: api, 
+    redisApi: client, 
+    chatid: "chatid", 
+    fetchFunc: fetchFunc});
   watcher.logger = logCapture;
 }
 
 function loadWatcher(fetchFunc) {
-  initWatcher();
-  watcher.fetchUrl = fetchFunc;
+  initWatcher(fetchFunc);
   return watcher.loadSettings(false);
 }
 
@@ -45,9 +48,9 @@ function loadTest(fname) {
     try {
       body = fs.readFileSync(fname).toString();
     } catch (e) { 
-      console.log("error:" + e); 
+      console.log("error loading test:" + e); 
     }
-    return { statusCode: 200, body: body, headers: [{ result: "pie" }] };
+    return { statusCode: 200, data: body, headers: [{ result: "pie" }] };
   });
 }
 
@@ -58,7 +61,7 @@ function loadGoodTest() {
 function loadBadTest() {
   return loadWatcher(async (url) => {
       // console.log("got a call for " + url);
-      return { statusCode: 200, body: 
+      return { statusCode: 200, data: 
         "<html><head></head><body>Do not match stuff<h1 class=\"offer-name\">pizza</h1></body></html>", 
         headers: [{ result: "pie" }] };
       });
@@ -67,7 +70,7 @@ function loadBadTest() {
 function loadFetchError() {
   return loadWatcher(async (url) => {
       // console.log("got a call for " + url);
-      return { statusCode: 404, body: null, headers: [{ result: "pie" }] };
+      return { statusCode: 404, data: null, headers: [{ result: "pie" }] };
     });
   }
   
@@ -220,7 +223,6 @@ test('/list default', (done) => {
     sendMessages = [];
     await api.testTextReceived('/list default');
     expect(regex.test(sendMessages[0].message)).toBeFalsy();
-    watcher.logger = logCapture;
     done();
   });
 });
@@ -502,9 +504,23 @@ test('updated page test', (done) => {
     sendMessages=[];
     await api.testTextReceived('/status');
     const regex = /Last check at (.*)\nLast difference at (.*)\nLast offer: \(LB3FAARE\) Beau Vigne Old Rutherford Cabernet Sauvignon Napa Valley 2019 \$49\nLast MD5: (.*)\nCurrent interval: 15 minutes\nService uptime: (.*)\n/;
-    console.log(sendMessages[0].message);
+    // console.log(sendMessages[0].message);
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     done();
   });
 });
+
+/*
+test('test with actual web fetch', (done) => {
+  initWatcher();
+  return watcher.loadSettings(false).then(async () => {
+    try {
+      await watcher.checkWines();
+      console.log(sendMessages);
+    } catch (e) {
+      console.log(e);
+    }
+    done();
+  })
+});*/

@@ -10,7 +10,7 @@ const fs = require('fs');
 const url = require('url');
 const { openStdin } = require('process');
 const { isDuration } = require('moment');
-const { default: axios } = require('axios');
+const axios = require('axios');
 
 const DEFAULT_RATE = 15;
 
@@ -29,29 +29,40 @@ const matching_default = [
 
 const siteroot = "https://www.lastbottlewines.com/";
 
-function watchRuntime(telegramApi, redisApi, chatid, auth) {
-  if (!telegramApi)
-    throw new Error("telegramApi is required");
-  if (!redisApi)
-     throw new Error("redis client is required");
-  if (!chatid) 
-    chatid = process.env.CHAT_ID;
-  
-    function formattedLog(message) {
-      // formatted console output
-      let out = message;
-      if (typeof(out) == 'object') {
-        out = JSON.stringify(out, null, 2);
-      }
-      console.log(mjs().format() + ": " + out);
+function watchRuntime(options) {
+  function formattedLog(message) {
+    // formatted console output
+    let out = message;
+    if (typeof(out) == 'object') {
+      out = JSON.stringify(out, null, 2);
     }
+    console.log(mjs().format() + ": " + out);
+  }
 
-  this.telegramApi = telegramApi,
-    this.client = redisApi,
-    this.chatid = chatid,
+  if (!options.telegramApi)
+    throw new Error("telegramApi is required");
+  if (!options.redisApi)
+     throw new Error("redis client is required");
+  if (!options.chatid) 
+    options.chatid = process.env.CHAT_ID;
+  if (!options.logger) 
+    options.logger = formattedLog;
+  if (!options.errorLogger) 
+    options.errorLogger = formattedLog;
+    
+  // allow for fetchUrl and postUrl to be overridden in test mode
+  // I could mock lib that too, but axios/jest mock had some hiccups
+  this.fetchUrl = (url) => {
+    return axios.get(url);
+  };
+  
+  this.telegramApi = options.telegramApi,
+    this.client = options.redisApi,
+    this.chatid = options.chatid,
     this.getAsync = promisify(this.client.get).bind(this.client),
-    this.logger = formattedLog,
-
+    this.logger = options.logger,
+    this.errorLogger = options.errorLogger,
+    this.fetchUrlFunc = (options.fetchFunc) ? options.fetchFunc : this.fetchUrl;
     this.runtimeSettings = {
       intervalTimer: null,
       startTime: new Date()
@@ -117,7 +128,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
          msgResp += "\nPaused until " + ((this.savedSettings.pauseUntil == 0) ? "forever" : this.savedSettings.pauseUntil);
        }
       } catch (e) {
-        this.logger(e);
+        this.logError(e);
       }
       try {
         const contents = fs.readFileSync('./git-head.txt', 'utf8');
@@ -266,12 +277,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
 
     this.sendMessage = async (message) => {
       this.logger("Sending message to " + this.chatid + " : " + message);
-      return telegramApi.sendMessage(this.chatid, message);
-    },
-
-    // allow for fetchUrl and postUrl to be overridden in test mode
-    this.fetchUrl = (url, headers) => {
-      return axios.get(url, headers);
+      return this.telegramApi.sendMessage(this.chatid, message);
     },
 
     this.parseOfferLink = (text) => {
@@ -326,16 +332,16 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
         }
       }
       
-      this.fetchUrl("https://www.lastbottlewines.com")
-        .then(({ statusCode, body, headers }) => {
-          if (statusCode != 200) {
-            this.logError("Fetch error: " + statusCode);
+      await this.fetchUrlFunc("https://www.lastbottlewines.com")
+        .then((res) => {
+          if (res.statusCode != 200) {
+            this.logError("Fetch error: " + res.statusCode);
             return;
           }
 
           // parse the body and look for the offer-name class
           // catch parse errors?  I think those just end up as roots with no data
-          const offerData = this.parseOffer(body);
+          const offerData = this.parseOffer(res.data);
 
           if (!offerData.name) {
             this.logError("offer-name class not found, perhaps the page formatting has changed or there was a page load error");
@@ -369,7 +375,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
           this.saveSettings();
 
           for (var name in this.savedSettings.matching) {
-            if (body.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
+            if (res.data.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
               const that = this;
               // remember the offer name for verification check on /buy
               this.savedSettings.lastMatch = offerData.name;
@@ -396,7 +402,7 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
             this.logger("No matching terms for '" + offerData.name + "'");
         })
         .catch((e) => {
-          this.logger(e);
+          this.logError(e);
         });
     },
 
@@ -454,28 +460,28 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
   
   // load up all of the text processors
   // /start
-  telegramApi.onText(/\/start$/, this.handleStart);
+  this.telegramApi.onText(/\/start$/, this.handleStart);
   // /list
-  telegramApi.onText(/\/list$/, this.handleList);
+  this.telegramApi.onText(/\/list$/, this.handleList);
   // /list default
-  telegramApi.onText(/\/list default$/, this.handleListDefault);
+  this.telegramApi.onText(/\/list default$/, this.handleListDefault);
   // /status
-  telegramApi.onText(/\/status$/, this.handleStatus);
+  this.telegramApi.onText(/\/status$/, this.handleStatus);
   // /add (term)
-  telegramApi.onText(/\/add (.+)/, this.handleAdd);
+  this.telegramApi.onText(/\/add (.+)/, this.handleAdd);
   // /del (term)
-  telegramApi.onText(/\/del (.+)/, this.handleDelete);
+  this.telegramApi.onText(/\/del (.+)/, this.handleDelete);
   // /now
-  telegramApi.onText(/\/now$/, this.handleNow);
+  this.telegramApi.onText(/\/now$/, this.handleNow);
   // /uptick (human-readable time | default)"
-  telegramApi.onText(/\/uptick (.+)/, this.handleUptick);
+  this.telegramApi.onText(/\/uptick (.+)/, this.handleUptick);
   // /pause [human-readable time]
-  telegramApi.onText(/\/pause$/, this.handlePause);
-  telegramApi.onText(/\/pause (.+)/, this.handlePause);
+  this.telegramApi.onText(/\/pause$/, this.handlePause);
+  this.telegramApi.onText(/\/pause (.+)/, this.handlePause);
   // /resume
-  telegramApi.onText(/\/resume$/, this.handleResume);
+  this.telegramApi.onText(/\/resume$/, this.handleResume);
   // /help
-  telegramApi.onText(/\/help$/, () => {
+  this.telegramApi.onText(/\/help$/, () => {
     this.sendMessage("Commands:\n" +
       "/start\n" +
       "/list [default]\n" +
@@ -489,11 +495,10 @@ function watchRuntime(telegramApi, redisApi, chatid, auth) {
       "/help");
   });
   // /settings
-  telegramApi.onText(/\/settings$/, this.handleSettings);
-  telegramApi.onText(/\/*/, () => {
+  this.telegramApi.onText(/\/settings$/, this.handleSettings);
+  this.telegramApi.onText(/\/*/, () => {
     this.sendMessage("Unknown command");
   })
-
 }
 
 exports.watchRuntime = watchRuntime;
