@@ -44,14 +44,14 @@ function loadGoodTest() {
     } catch (e) { 
       console.log("error:" + e); 
     }
-    return { statusCode: 200, data: body, headers: [{ result: "pie" }] };
+    return { status: 200, data: body, headers: [{ result: "pie" }] };
   });
 }
 
 function loadBadTest() {
   return loadWatcher(async (url) => {
     // console.log("got a call for " + url);
-    return { statusCode: 200, data: 
+    return { status: 200, data: 
       "<html><head></head><body>Do not match stuff<h1 class=\"offer-name\">pizza</h1></body></html>", 
       headers: [{ result: "pie" }] };
   });
@@ -60,7 +60,7 @@ function loadBadTest() {
 function loadFetchError() {
   return loadWatcher(async (url) => {
     // console.log("got a call for " + url);
-    return { statusCode: 404, data: null, headers: [{ result: "pie" }] };
+    return { status: 404, data: null, headers: [{ result: "pie" }] };
   });
 }
 

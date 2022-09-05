@@ -50,7 +50,7 @@ function loadTest(fname) {
     } catch (e) { 
       console.log("error loading test:" + e); 
     }
-    return { statusCode: 200, data: body, headers: [{ result: "pie" }] };
+    return { status: 200, data: body, headers: [{ result: "pie" }] };
   });
 }
 
@@ -61,7 +61,7 @@ function loadGoodTest() {
 function loadBadTest() {
   return loadWatcher(async (url) => {
       // console.log("got a call for " + url);
-      return { statusCode: 200, data: 
+      return { status: 200, data: 
         "<html><head></head><body>Do not match stuff<h1 class=\"offer-name\">pizza</h1></body></html>", 
         headers: [{ result: "pie" }] };
       });
@@ -70,7 +70,7 @@ function loadBadTest() {
 function loadFetchError() {
   return loadWatcher(async (url) => {
       // console.log("got a call for " + url);
-      return { statusCode: 404, data: null, headers: [{ result: "pie" }] };
+      return { status: 404, data: null, headers: [{ result: "pie" }] };
     });
   }
   
@@ -511,16 +511,16 @@ test('updated page test', (done) => {
   });
 });
 
-/*
 test('test with actual web fetch', (done) => {
   initWatcher();
   return watcher.loadSettings(false).then(async () => {
     try {
-      await watcher.checkWines();
-      console.log(sendMessages);
+      await watcher.checkWines(true);
+      expect(sendMessages.length).toEqual(1);
+      // console.log(sendMessages);
     } catch (e) {
       console.log(e);
     }
     done();
   })
-});*/
+});

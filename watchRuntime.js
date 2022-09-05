@@ -52,7 +52,7 @@ function watchRuntime(options) {
     
   // allow for fetchUrl and postUrl to be overridden in test mode
   // I could mock lib that too, but axios/jest mock had some hiccups
-  this.fetchUrl = (url) => {
+  this.fetchUrl = async (url) => {
     return axios.get(url);
   };
   
@@ -334,8 +334,8 @@ function watchRuntime(options) {
       
       await this.fetchUrlFunc("https://www.lastbottlewines.com")
         .then((res) => {
-          if (res.statusCode != 200) {
-            this.logError("Fetch error: " + res.statusCode);
+          if (res.status != 200) {
+            this.logError("Fetch error: " + res.status);
             return;
           }
 
