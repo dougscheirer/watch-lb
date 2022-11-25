@@ -23,7 +23,7 @@
     "eslint": "^8.3.0",
     "jest": "^26.1.0",
     "mockdate": "^3.0.5",
-    "redis-mock": "^0.47.0"
+    "redis-mock": "^0.56.3"
   },
   "jshintConfig": {
     "esversion": 8
