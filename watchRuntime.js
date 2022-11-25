@@ -1,5 +1,4 @@
 require('dotenv').config();
-const curl = require('axios');
 const parser = require('node-html-parser');
 const crypto = require('crypto');
 const mjs = require('moment');
@@ -8,8 +7,6 @@ const { promisify } = require('util');
 const durationParser = require('parse-duration');
 const fs = require('fs');
 const url = require('url');
-const { openStdin } = require('process');
-const { isDuration } = require('moment');
 const axios = require('axios');
 
 const DEFAULT_RATE = 15;
@@ -60,6 +57,7 @@ function watchRuntime(options) {
     this.client = options.redisApi,
     this.chatid = options.chatid,
     this.getAsync = promisify(this.client.get).bind(this.client),
+    this.setAsync = promisify(this.client.set).bind(this.client),
     this.logger = options.logger,
     this.errorLogger = options.errorLogger,
     this.fetchUrlFunc = (options.fetchFunc) ? options.fetchFunc : this.fetchUrl;
@@ -304,13 +302,26 @@ function watchRuntime(options) {
         offerLink = offer ? offer.getAttribute('href') : null;
       }
       const md5 = crypto.createHash('md5').update(body).digest("hex");
-      const rawText = (text) => { return (text && text.rawText ? text.rawText : null );}
-      return { name: offerName.rawText, 
+      const rawText = (text) => { return (text && text.rawText ? text.rawText : null ); }
+      return { name: rawText(offerName), 
         price: rawText(offerPrice), 
         link: offerLink, 
         id: this.parseOfferLink(offerLink), 
         md5: md5
       };
+    },
+
+    toRedisDatestamp = (dt) => {
+        function pad2(n) {  // always returns a string
+          return (n < 10 ? '0' : '') + n;
+      }
+
+      return dt.getFullYear() +
+          pad2(dt.getMonth() + 1) + 
+          pad2(dt.getDate()) +
+          pad2(dt.getHours()) +
+          pad2(dt.getMinutes()) +
+          pad2(dt.getSeconds());
     },
 
     this.checkWines = async (reportNothing) => {
@@ -344,7 +355,10 @@ function watchRuntime(options) {
           const offerData = this.parseOffer(res.data);
 
           if (!offerData.name) {
-            this.logError("offer-name class not found, perhaps the page formatting has changed or there was a page load error");
+            const redisRecord = 'offer-invalid-' + toRedisDatestamp(new Date(Date.now()));
+            this.logError("offer-name class not found, perhaps the page formatting has changed or there was a page load error: " + redisRecord);
+            // save the fetched data to redis for later analysis
+            this.client.set(redisRecord, res.data);
             return;
           }
 

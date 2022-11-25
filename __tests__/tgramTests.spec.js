@@ -9,6 +9,8 @@ const durationParser = require("parse-duration");
 var sendMessages = [];
 var watcher = null;
 var api = null;
+var redisClient = null;
+
 // for use elsewhere
 const adate = "03/16/2020";
 const posMatch =  "Found a match for cabernet ($89) in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com";
@@ -26,9 +28,10 @@ function initWatcher(fetchFunc) {
           function (chatid, msg) { sendMessages.push({ chatid: chatid, message: msg }); },
           { onlyFirstMatch: true },
   );
-  client = redis.createClient();
-  // clean redis
-  client.del('watch-lb-settings');
+  var client = redis.createClient();
+  redisClient = client;
+  // clean redis? 
+  // client.del('watch-lb-settings');
   watcher = new watchRuntime({
     telegramApi: api, 
     redisApi: client, 
@@ -63,6 +66,15 @@ function loadBadTest() {
       // console.log("got a call for " + url);
       return { status: 200, data: 
         "<html><head></head><body>Do not match stuff<h1 class=\"offer-name\">pizza</h1></body></html>", 
+        headers: [{ result: "pie" }] };
+      });
+}
+
+function loadBadTest2() {
+  return loadWatcher(async (url) => {
+      // console.log("got a call for " + url);
+      return { status: 200, data: 
+        "<html><head></head><body>Do not match stuff<h1 class=\"offer-name-tag-invalid\">pizza</h1></body></html>", 
         headers: [{ result: "pie" }] };
       });
 }
@@ -109,6 +121,19 @@ test('/now no result', (done) => {
     await api.testTextReceived('/now');
     expect(sendMessages[0].message).toEqual("No matching terms in 'pizza'");
     expect(sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
+
+test('/now bad parse', (done) => {
+  return loadBadTest2().then(async () => {
+    await api.testTextReceived('/now');
+    const regex = new RegExp("offer-name class not found, perhaps the page formatting has changed or there was a page load error: offer-invalid-(.*)");
+    expect(regex.test(sendMessages[0].message)).toBeTruthy();
+    expect(sendMessages.length).toEqual(1);
+    // expect a new redis value of 'offer-invalid-YYYYMMDDHHMMSS' with the bad test data
+    console.log(redisClient);
     done();
   });
 });
