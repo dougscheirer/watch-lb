@@ -8,31 +8,30 @@ const { promisify } = require('util');
 var sendMessages = [];
 var watcher = null;
 var api = null;
-var client = null;
+var redisClient = redis.createClient();
 var getAsync = null;
 
 function logCapture() {
   // don't spit out watcher messages
 }
 
-function initWatcher() {
+function initWatcher(fetchFunc) {
   api = new tgramMock(
     "chatid", 
     function (chatid, msg) { sendMessages.push({ chatid: chatid, message: msg }); },
     { onlyFirstMatch: true });
-  client = redis.createClient();
-  getAsync = promisify(client.get).bind(client),
+  getAsync = promisify(redisClient.get).bind(redisClient),
   watcher = new watchRuntime({
     telegramApi: api, 
-    redisApi: client, 
+    redisApi: redisClient, 
     chatid: "chatid",
     logger: logCapture,
+    fetchFunc: fetchFunc,
     errorLogger: logCapture});
 }
 
 function loadWatcher(fetchFunc) {
-  initWatcher();
-  watcher.fetchUrl = fetchFunc;
+  initWatcher(fetchFunc);
   return watcher.loadSettings(false);
 }
 
@@ -66,6 +65,7 @@ function loadFetchError() {
 
 beforeEach(() => {
   sendMessages = [];
+  redisClient.flushall();
 });
 
 afterEach(() => {
@@ -105,7 +105,7 @@ test('changing uptick saves', (done) => {
     const settingObject = JSON.parse(settings);
     expect(settingObject.defaultRate).toBe(60);
     done();
-  })
+  });
 });
 
 test('loading settings is identical', (done) => {

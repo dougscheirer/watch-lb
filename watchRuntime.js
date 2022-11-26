@@ -82,35 +82,35 @@ function watchRuntime(options) {
       pauseUntil: -1, // -1 is not paused, 0 is forever, other is a Date
     },
 
-    this.saveSettings = () => {
-      this.client.set('watch-lb-settings', JSON.stringify(this.savedSettings));
+    this.saveSettings = async () => {
+      return this.setAsync('watch-lb-settings', JSON.stringify(this.savedSettings));
     },
 
     this.sendList = () => {
       this.sendMessage("Current search terms:\n" + this.savedSettings.matching.join("\n"));
     },
 
-    this.handleStart = (msg) => {
+    this.handleStart = async (msg) => {
       const chatId = msg.chat.id;
 
       this.sendMessage("Your chat id is " + chatId);
     },
 
     // /list
-    this.handleList = (msg) => {
+    this.handleList = async (msg) => {
       this.sendList();
     },
 
     // /list default
-    this.handleListDefault = (msg) => {
+    this.handleListDefault = async (msg) => {
       this.savedSettings.matching = matching_default.slice();
-      this.saveSettings();
+      await this.saveSettings();
       this.logger("Restored default list");
       this.sendList();
     },
 
     // /status
-    this.handleStatus = (msg) => {
+    this.handleStatus = async (msg) => {
       const duration = mjs.duration(this.savedSettings.lastIntervalUpdate - this.savedSettings.lastMD5Update);
       var msgResp = "Never checked\n";
       if (this.savedSettings.lastMD5Update != null) {
@@ -140,7 +140,7 @@ function watchRuntime(options) {
     },
 
     // /add (term)
-    this.handleAdd = (msg, match) => {
+    this.handleAdd = async (msg, match) => {
       const toAdd = match[1].toLowerCase();
       if (this.savedSettings.matching.indexOf(toAdd) >= 0) {
         this.sendMessage(toAdd + " is already a search term");
@@ -155,12 +155,12 @@ function watchRuntime(options) {
       this.savedSettings.lastOfferName = "";
       this.savedSettings.lastOfferPrice = 0;
       // write to redis
-      this.saveSettings();
-      this.checkWines(true);
+      await this.saveSettings();
+      return this.checkWines(true);
     },
 
     // /del (term)
-    this.handleDelete = (msg, match) => {
+    this.handleDelete = async (msg, match) => {
       const toDel = match[1].toLowerCase();
       if (this.savedSettings.matching.indexOf(toDel) < 0) {
         this.sendMessage(toDel + " is not a search term");
@@ -169,7 +169,7 @@ function watchRuntime(options) {
       this.savedSettings.matching = this.savedSettings.matching.splice(toDel, 1);
       this.sendList();
       // write to redis
-      this.saveSettings();
+      await this.saveSettings();
       // invalidate the MD5 cache
       this.savedSettings.lastMD5 = null;
       this.savedSettings.lastMD5Update = null;
@@ -177,17 +177,17 @@ function watchRuntime(options) {
       this.savedSettings.lastOfferName = "";
       this.savedSettings.lastOfferPrice = 0;
       // write to redis
-      this.saveSettings();
-      this.checkWines(true);
+      await this.saveSettings();
+      return this.checkWines(true);
     },
 
     // /now
-    this.handleNow = (msg) => {
-      this.checkWines(true);
+    this.handleNow = async (msg) => {
+      return this.checkWines(true);
     },
 
     // /uptick (human-readable time | default)"
-    this.handleUptick = (msg, match) => {
+    this.handleUptick = async (msg, match) => {
       var number = null;
       if (match[1] == "default") {
         number = DEFAULT_RATE;
@@ -209,15 +209,15 @@ function watchRuntime(options) {
 
       // change the frequency of checks to (match) minutes
       clearInterval(this.runtimeSettings.intervalTimer);
-      this.checkWines();
+      await this.checkWines();
       this.runtimeSettings.intervalTimer = setInterval(this.checkWines, number * 1000 * 60);
       // save the last setting
       this.savedSettings.defaultRate = number;
-      this.saveSettings();
+      await this.saveSettings();
       this.sendMessage("Check interval changed to " + mjs.duration(number * 1000 * 60).humanize());
     },
 
-    this.handlePause = (msg, match) => {
+    this.handlePause = async (msg, match) => {
       var duration = null;
       var datestamp = null;
       var timestamp = null;
@@ -253,24 +253,51 @@ function watchRuntime(options) {
         }
       }
       this.savedSettings.pauseUntil = until;
-      this.saveSettings();
+      await this.saveSettings();
       this.sendMessage("Pausing until " + ((until > 0) ? until : "forever"));
     },
 
-    this.handleResume = (msg) => {
+    this.handleResume = async (msg) => {
       this.savedSettings.pauseUntil = -1;
-      this.saveSettings();
+      await this.saveSettings();
       this.sendMessage("Resuming with check interval of " + mjs.duration(this.savedSettings.defaultRate * 1000 * 60).humanize());
     },
 
-    this.handleSettings = (msg) => {
+    this.handleSettings = async (msg) => {
       this.sendMessage(JSON.stringify(this.savedSettings));
+    },
+
+    this.handleClearError = async (msg, match) => {
+      if (match.length == 1) {
+        await this.client.keys('offer-invalid*', function(err, rows) {
+          for(var i = 0, j = rows.length; i < j; ++i) {
+            this.client.del(rows[i])
+          }
+        });
+        return this.sendMessage("Cleared all offer invalid keys")
+      }
+      // just the requested one
+      const delmsg = await this.client.del(match[1]);
+      // not sure what the retval is here
+      this.sendMessage("Cleared " + match[1]);
+    },
+
+    this.handleShowError = async (msg, match) => {
+      if (match.length != 2) {
+        return this.sendMessage("/showerror requires an error key");
+      }
+      // fetch the key
+      const error = await this.getAsync(match[1]);
+      if (!error) {
+        return this.sendMessage('No error key value ' + match[1]);
+      }
+      return this.sendMessage('Error ' + match[1] + "\n" + error);
     },
 
     this.logError = async (message) => {
       this.logger("ERROR >>>");
       this.logger(message);
-      await this.sendMessage(message);
+      this.sendMessage(message);
     },
 
     this.sendMessage = async (message) => {
@@ -334,7 +361,7 @@ function watchRuntime(options) {
       } else if (this.savedSettings.pauseUntil != -1) {
         if (this.savedSettings.lastIntervalUpdate > this.savedSettings.pauseUntil) {
           this.savedSettings.pauseUntil = -1;
-          this.saveSettings();
+          await this.saveSettings();
         } else {
           if (reportNothing) {
             this.sendMessage("Paused, will resume on " + this.savedSettings.pauseUntil);
@@ -344,7 +371,7 @@ function watchRuntime(options) {
       }
       
       await this.fetchUrlFunc("https://www.lastbottlewines.com")
-        .then((res) => {
+        .then(async (res) => {
           if (res.status != 200) {
             this.logError("Fetch error: " + res.status);
             return;
@@ -372,7 +399,7 @@ function watchRuntime(options) {
               if (!this.savedSettings.sent24hrMessage && ((new Date()) - this.savedSettings.lastMD5Update) > 24 * 60 * 60 * 1000) {
                 this.savedSettings.sent24hrMessage = true;
                 this.sendMessage("No updates for more than 24h");
-                this.saveSettings();
+                await this.saveSettings();
               }
             }
             return;
@@ -386,14 +413,14 @@ function watchRuntime(options) {
           this.savedSettings.lastOfferName = offerData.name;
           this.savedSettings.lastOfferPrice = offerData.price;
     
-          this.saveSettings();
+          await this.saveSettings();
 
           for (var name in this.savedSettings.matching) {
             if (res.data.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
               const that = this;
               // remember the offer name for verification check on /buy
               this.savedSettings.lastMatch = offerData.name;
-              this.saveSettings();
+              await this.saveSettings();
               // format the message and compare to the last one, if they are identical just skip it
               const msg = "Found a match for " + this.savedSettings.matching[name] + " ($" + offerData.price + ") in " + offerData.name + "\nhttps://lastbottlewines.com";
               if (msg != this.savedSettings.lastMessage) {
@@ -422,11 +449,11 @@ function watchRuntime(options) {
 
     /* jshint expr: true */
     this.loadSettings = async (start) => {
-      return this.getAsync('watch-lb-settings').then((res) => {
+      return this.getAsync('watch-lb-settings').then(async (res) => {
         if (!res) {
           // initialize matching
           this.logger("Initializing from defaults");
-          this.saveSettings();
+          await this.saveSettings();
         } else {
           var loaded = JSON.parse(res);
           // merge with our settings
@@ -451,7 +478,7 @@ function watchRuntime(options) {
         // now we have master settings, continue with booting
         if (!this.savedSettings.defaultRate) {
           this.savedSettings.defaultRate = process.env.CHECK_RATE || DEFAULT_RATE;
-          this.saveSettings();
+          await this.saveSettings();
         }
         if (start == undefined || !!start) {
           this.runtimeSettings.intervalTimer = setInterval(this.checkWines, 1000 * 60 * this.savedSettings.defaultRate);
@@ -461,7 +488,6 @@ function watchRuntime(options) {
 
     this.logStartTime = () => {
       this.runtimeSettings.startTime = new Date();
-      this.saveSettings();
     },
 
     // shutdown
@@ -494,6 +520,10 @@ function watchRuntime(options) {
   this.telegramApi.onText(/\/pause (.+)/, this.handlePause);
   // /resume
   this.telegramApi.onText(/\/resume$/, this.handleResume);
+  // errors
+  this.telegramApi.onText(/\/showerror (.+)/, this.handleShowError);
+  this.telegramApi.onText(/\/clrerror$/, this.handleClearError);
+  this.telegramApi.onText(/\/clrerror (.+)/, this.handleClearError);
   // /help
   this.telegramApi.onText(/\/help$/, () => {
     this.sendMessage("Commands:\n" +
@@ -506,6 +536,8 @@ function watchRuntime(options) {
       "/uptick (duration | default)\n" +
       "/pause [duration]\n" +
       "/resume\n" +
+      "/showerror (key)\n" +
+      "/clrerror [key]" + 
       "/help");
   });
   // /settings

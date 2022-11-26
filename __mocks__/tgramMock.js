@@ -8,18 +8,17 @@ function tgramMock(chatId, cb, options) {
     this.regexList.push({  regex: new RegExp(regexp), callback: fn });
   },
   this.testTextReceived = async (text) => {
-    // copied with modification from telegram.js
-    this.regexList.some((reg) => {
+    for (i in this.regexList) { 
+      const reg = this.regexList[i];
       const result = reg.regex.exec(text);
       if (!result) {
-        return false;
+        continue;
       }
       // reset index so we start at the beginning of the regex each time
       reg.regex.lastIndex = 0;
-      reg.callback(this.msg, text.match(reg.regex));
-      // returning truthy value exits .some
-      return this.options.onlyFirstMatch;
-    })
+      await reg.callback(this.msg, text.match(reg.regex));
+      return;
+    };
   },
   this.sendMessage = (chat_id,  msg) => {
     this.sendMsgCallback(chat_id, msg);

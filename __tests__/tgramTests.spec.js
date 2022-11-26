@@ -2,20 +2,21 @@ const { watchRuntime } = require('../watchRuntime');
 const redis = require("redis-mock");
 const fs = require('fs');
 const tgramMock = require('../__mocks__/tgramMock');
-const { syncBuiltinESMExports } = require('module');
 const MockDate = require("mockdate");
 const durationParser = require("parse-duration");
+const { promisify } = require('util');
 
 var sendMessages = [];
 var watcher = null;
 var api = null;
-var redisClient = null;
+var redisClient = redis.createClient();
 
 // for use elsewhere
 const adate = "03/16/2020";
 const posMatch =  "Found a match for cabernet ($89) in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com";
 const baseCheckRegex = "Last check at (.*)\nLast difference at (.*)\nLast offer: \\(LB8212\\) Groth Oakville Cabernet Sauvignon Reserve 2015 \\$89\nLast MD5: (.*)\nCurrent interval: 15 minutes\n";
 const serviceRegex = "Service uptime: (.*)\n"
+const badTest2Content = "<html><head></head><body>Do not match stuff<h1 class=\"offer-name-tag-invalid\">pizza</h1></body></html>";
 
 function logCapture() {
   // don't spit out watcher messages
@@ -28,13 +29,11 @@ function initWatcher(fetchFunc) {
           function (chatid, msg) { sendMessages.push({ chatid: chatid, message: msg }); },
           { onlyFirstMatch: true },
   );
-  var client = redis.createClient();
-  redisClient = client;
   // clean redis? 
   // client.del('watch-lb-settings');
   watcher = new watchRuntime({
     telegramApi: api, 
-    redisApi: client, 
+    redisApi: redisClient, 
     chatid: "chatid", 
     fetchFunc: fetchFunc});
   watcher.logger = logCapture;
@@ -74,7 +73,7 @@ function loadBadTest2() {
   return loadWatcher(async (url) => {
       // console.log("got a call for " + url);
       return { status: 200, data: 
-        "<html><head></head><body>Do not match stuff<h1 class=\"offer-name-tag-invalid\">pizza</h1></body></html>", 
+        badTest2Content, 
         headers: [{ result: "pie" }] };
       });
 }
@@ -87,6 +86,9 @@ function loadFetchError() {
   }
   
 beforeEach(() => {
+  if (redisClient) {
+    redisClient.flushall();
+  }
   sendMessages = [];
 });
 
@@ -127,13 +129,59 @@ test('/now no result', (done) => {
 
 
 test('/now bad parse', (done) => {
+  const getAsync = promisify(redisClient.get).bind(redisClient);
+
   return loadBadTest2().then(async () => {
     await api.testTextReceived('/now');
     const regex = new RegExp("offer-name class not found, perhaps the page formatting has changed or there was a page load error: offer-invalid-(.*)");
     expect(regex.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
     // expect a new redis value of 'offer-invalid-YYYYMMDDHHMMSS' with the bad test data
-    console.log(redisClient);
+    rx=/offer-invalid-(.*)/g;
+    const match = rx.exec(sendMessages[0].message);
+    const dump = await getAsync(match[0]);
+    expect(dump).toEqual(badTest2Content);
+    done();
+  });
+});
+
+test('/now bad parse + /showerror', (done) => {
+  const getAsync = promisify(redisClient.get).bind(redisClient);
+
+  return loadBadTest2().then(async () => {
+    await api.testTextReceived('/now');
+    // expect a new redis value of 'offer-invalid-YYYYMMDDHHMMSS' with the bad test data
+    rx=/offer-invalid-(.*)/g;
+    const match = rx.exec(sendMessages[0].message);
+    sendMessages = [];
+    await api.testTextReceived('/showerror ' + match[0]);
+    expect("Error " + match[0] + "\n" + badTest2Content).toEqual(sendMessages[0].message);
+    done();
+  });
+});
+
+test('/now bad parse + /clrerror N', (done) => {
+  return loadBadTest2().then(async () => {
+    await api.testTextReceived('/now');
+    // expect a new redis value of 'offer-invalid-YYYYMMDDHHMMSS' with the bad test data
+    rx=/offer-invalid-(.*)/g;
+    const match = rx.exec(sendMessages[0].message);
+    sendMessages = [];
+    await api.testTextReceived('/clrerror ' + match[0]);
+    expect("Cleared " + match).toEqual(sendMessages[0].message);
+    done();
+  });
+});
+
+test('/now bad parse + /clrerror', (done) => {
+  return loadBadTest2().then(async () => {
+    await api.testTextReceived('/now');
+    // expect a new redis value of 'offer-invalid-YYYYMMDDHHMMSS' with the bad test data
+    rx=/offer-invalid-(.*)/g;
+    const match = rx.exec(sendMessages[0].message);
+    sendMessages = [];
+    await api.testTextReceived('/clrerror');
+    expect("Cleared all invalid offers").toEqual(sendMessages[0].message);
     done();
   });
 });
@@ -256,8 +304,9 @@ test('/uptick 3', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/uptick 3');
     const regex=/Check interval changed to 3 minutes/;
-    expect(regex.test(sendMessages[0].message)).toBeTruthy();
-    // expect(sendMessages.length).toEqual(2);
+    // first message is match message from checkWines
+    expect(sendMessages.length).toEqual(2);
+    expect(regex.test(sendMessages[1].message)).toBeTruthy();
     done();
   });
 });
@@ -266,8 +315,9 @@ test('/uptick 1d', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/uptick 1d');
     const regex=/Check interval changed to a day/;
-    expect(regex.test(sendMessages[0].message)).toBeTruthy();
-    // expect(sendMessages.length).toEqual(2);
+    // first message is match message from checkWines
+    expect(sendMessages.length).toEqual(2);
+    expect(regex.test(sendMessages[1].message)).toBeTruthy();
     done();
   });
 });
@@ -276,8 +326,9 @@ test('/uptick default', (done) => {
   return loadGoodTest().then(async () => {
     await api.testTextReceived('/uptick default');
     const regex=/Check interval changed to 15 minutes/;
-    expect(regex.test(sendMessages[0].message)).toBeTruthy();
-    // expect(sendMessages.length).toEqual(2);
+    // first message is match message from checkWines
+    expect(sendMessages.length).toEqual(2);
+    expect(regex.test(sendMessages[1].message)).toBeTruthy();
     done();
   });
 });
@@ -357,7 +408,7 @@ test('/pause', (done) => {
     expect(sendMessages.length).toEqual(1);
     // resume
     sendMessages=[];
-    api.testTextReceived('/resume');
+    await api.testTextReceived('/resume');
     const regex3=/Resuming with check interval of/;
     expect(regex3.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
@@ -379,7 +430,7 @@ test('/pause 2 weeks and resume', (done) => {
     expect(sendMessages.length).toEqual(1);
     // resume
     sendMessages=[];
-    api.testTextReceived('/resume');
+    await api.testTextReceived('/resume');
     const regex3=/Resuming with check interval of/;
     expect(regex3.test(sendMessages[0].message)).toBeTruthy();
     expect(sendMessages.length).toEqual(1);
@@ -536,6 +587,7 @@ test('updated page test', (done) => {
   });
 });
 
+/* 
 test('test with actual web fetch', (done) => {
   initWatcher();
   return watcher.loadSettings(false).then(async () => {
@@ -549,3 +601,4 @@ test('test with actual web fetch', (done) => {
     done();
   })
 });
+*/

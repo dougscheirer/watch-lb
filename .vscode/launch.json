@@ -6,12 +6,21 @@
   "configurations": [
   
     {
-      "name": "Launch via npm",
+      "name": "Run tests",
       "type": "node",
       "request": "launch",
       "cwd": "${workspaceFolder}",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run-script", "test"]
+    },
+    {
+      "name": "Run one test",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "runtimeExecutable": "jest",
+      "runtimeArgs": ["-t", "'/bad-cmd'"]
     }
+
   ]
 }
