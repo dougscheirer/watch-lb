@@ -89,7 +89,8 @@ function watchRuntime(options) {
       pauseUntil: -1, // -1 is not paused, 0 is forever, other is a Date
     },
 
-    this.saveSettings = async () => {
+    this.saveSettings = async (opts) => {
+      this.savedSettings = { ...this.savedSettings, ...opts };
       return this.setAsync('watch-lb-settings', JSON.stringify(this.savedSettings));
     },
 
@@ -110,8 +111,7 @@ function watchRuntime(options) {
 
     // /list default
     this.handleListDefault = async (msg) => {
-      this.savedSettings.matching = matching_default.slice();
-      await this.saveSettings();
+      await this.saveSettings({ matching: matching_default.slice() });
       this.logger("Restored default list");
       this.sendList();
     },
@@ -156,13 +156,13 @@ function watchRuntime(options) {
       this.savedSettings.matching.push(toAdd);
       this.sendList();
       // invalidate the MD5 cache
-      this.savedSettings.lastMD5 = null;
-      this.savedSettings.lastMD5Update = null;
-      this.savedSettings.lastOfferID = null;
-      this.savedSettings.lastOfferName = "";
-      this.savedSettings.lastOfferPrice = 0;
-      // write to redis
-      await this.saveSettings();
+      await this.saveSettings({
+        lastMD5: null,
+        lastMD5Update: null,
+        lastOfferID: null,
+        lastOfferName: "",
+        lastOfferPrice: 0
+      });
       return this.checkWines(true);
     },
 
@@ -173,18 +173,17 @@ function watchRuntime(options) {
         this.sendMessage(toDel + " is not a search term");
         return;
       }
-      this.savedSettings.matching = this.savedSettings.matching.splice(toDel, 1);
+      await this.saveSettings({ matching: this.savedSettings.matching.splice(toDel, 1) });
       this.sendList();
       // write to redis
-      await this.saveSettings();
+      await this.saveSettings({
       // invalidate the MD5 cache
-      this.savedSettings.lastMD5 = null;
-      this.savedSettings.lastMD5Update = null;
-      this.savedSettings.lastOfferID = null;
-      this.savedSettings.lastOfferName = "";
-      this.savedSettings.lastOfferPrice = 0;
-      // write to redis
-      await this.saveSettings();
+        lastMD5: null,
+        lastMD5Update: null,
+        lastOfferID: null,
+        lastOfferName: "",
+        lastOfferPrice: 0
+      });
       return this.checkWines(true);
     },
 
@@ -220,8 +219,7 @@ function watchRuntime(options) {
       this.runtimeSettings.intervalTimer = this.setInterval(this.checkWines, number * 1000 * 60);
 
       // save the last setting
-      this.savedSettings.defaultRate = number;
-      await this.saveSettings();
+      await this.saveSettings({ defaultRate: number });
       this.sendMessage("Check interval changed to " + mjs.duration(number * 1000 * 60).humanize());
     },
 
@@ -260,14 +258,12 @@ function watchRuntime(options) {
           return;
         }
       }
-      this.savedSettings.pauseUntil = until;
-      await this.saveSettings();
+      await this.saveSettings({ pauseUntil: until });
       this.sendMessage("Pausing until " + ((until > 0) ? until : "forever"));
     },
 
     this.handleResume = async (msg) => {
-      this.savedSettings.pauseUntil = -1;
-      await this.saveSettings();
+      await this.saveSettings({ pauseUntil: -1 });
       this.sendMessage("Resuming with check interval of " + mjs.duration(this.savedSettings.defaultRate * 1000 * 60).humanize());
     },
 
@@ -403,8 +399,7 @@ function watchRuntime(options) {
         return; // we're paused
       } else if (this.savedSettings.pauseUntil != -1) {
         if (this.savedSettings.lastIntervalUpdate > this.savedSettings.pauseUntil) {
-          this.savedSettings.pauseUntil = -1;
-          await this.saveSettings();
+          await this.saveSettings({ pauseUntil: -1 });
         } else {
           if (reportNothing) {
             this.sendMessage("Paused, will resume on " + this.savedSettings.pauseUntil);
@@ -439,37 +434,34 @@ function watchRuntime(options) {
               this.logger("Time since last change: " + ((new Date()) - this.savedSettings.lastMD5Update));
               // how long since it changed?  are we not getting updates?
               if (!this.savedSettings.sent24hrMessage && ((new Date()) - this.savedSettings.lastMD5Update) > 24 * 60 * 60 * 1000) {
-                this.savedSettings.sent24hrMessage = true;
+                await this.saveSettings({ sent24hrMessage: true });
                 this.sendMessage("No updates for more than 24h");
-                await this.saveSettings();
               }
             }
             return;
           }
 
           // remember the MD5 and if we have sent our message
-          this.savedSettings.sent24hrMessage = false;
-          this.savedSettings.lastMD5 = offerData.md5;
-          this.savedSettings.lastMD5Update = new Date();
-          this.savedSettings.lastOfferID = offerData.id;
-          this.savedSettings.lastOfferName = offerData.name;
-          this.savedSettings.lastOfferPrice = offerData.price;
+          await this.saveSettings({ 
+            sent24hrMessage: false,
+            lastMD5: offerData.md5,
+            lastMD5Update: new Date(),
+            lastOfferID: offerData.id,
+            lastOfferName: offerData.name,
+            lastOfferPrice: offerData.price,
+          });
     
-          await this.saveSettings();
-
           for (var name in this.savedSettings.matching) {
             if (res.data.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
               const that = this;
               // remember the offer name for verification check on /buy
-              this.savedSettings.lastMatch = offerData.name;
-              await this.saveSettings();
+              await this.saveSettings({ lastMatch: offerData.name });
               // format the message and compare to the last one, if they are identical just skip it
               const msg = "Found a match for " + this.savedSettings.matching[name] + " ($" + offerData.price + ") in " + offerData.name + "\nhttps://lastbottlewines.com";
               if (msg != this.savedSettings.lastMessage) {
                 this.sendMessage(msg)
                   .then(async function (data) {
-                    that.savedSettings.lastMessage = msg;
-                    that.saveSettings();
+                    that.saveSettings({ lastMessage: msg });
                     that.logger("We got some data");
                     that.logger(data);
                     // write this offer to storage
@@ -522,8 +514,7 @@ function watchRuntime(options) {
 
         // now we have master settings, continue with booting
         if (!this.savedSettings.defaultRate) {
-          this.savedSettings.defaultRate = process.env.CHECK_RATE || DEFAULT_RATE;
-          await this.saveSettings();
+          await this.saveSettings({ defaultRate: process.env.CHECK_RATE || DEFAULT_RATE });
         }
         this.runtimeSettings.intervalTimer = this.setInterval(this.checkWines, 1000 * 60 * this.savedSettings.defaultRate);
       });
