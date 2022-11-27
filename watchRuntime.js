@@ -64,7 +64,8 @@ function watchRuntime(options) {
     this.fetchUrlFunc = (options.fetchFunc) ? options.fetchFunc : this.fetchUrl;
     this.runtimeSettings = {
       intervalTimer: null,
-      startTime: new Date()
+      startTime: new Date(),
+      startedInterval: false
     },
 
     // Note: Date and other non-string objects must be converted from strings in loadSettings()
@@ -209,9 +210,15 @@ function watchRuntime(options) {
       }
 
       // change the frequency of checks to (match) minutes
-      clearInterval(this.runtimeSettings.intervalTimer);
+      if (this.runtimeSettings.startedInterval) {
+        // only when not testing
+        clearInterval(this.runtimeSettings.intervalTimer);
+      }
       await this.checkWines();
-      this.runtimeSettings.intervalTimer = setInterval(this.checkWines, number * 1000 * 60);
+      if (this.runtimeSettings.startedInterval) {
+        // only when not testing
+        this.runtimeSettings.intervalTimer = setInterval(this.checkWines, number * 1000 * 60);
+      }
       // save the last setting
       this.savedSettings.defaultRate = number;
       await this.saveSettings();
@@ -479,7 +486,9 @@ function watchRuntime(options) {
           this.savedSettings.defaultRate = process.env.CHECK_RATE || DEFAULT_RATE;
           await this.saveSettings();
         }
-        if (start == undefined || !!start) {
+        this.runtimeSettings.startedInterval = (start == undefined || !!start);
+        if (this.runtimeSettings.startedInterval) {
+          // only when not testing
           this.runtimeSettings.intervalTimer = setInterval(this.checkWines, 1000 * 60 * this.savedSettings.defaultRate);
         }
       });

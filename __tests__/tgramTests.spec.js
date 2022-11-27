@@ -103,6 +103,12 @@ afterEach(() => {
   watcher = null;
 });
 
+/***************************************************************************************
+ * 
+ * Begin tests
+ * 
+ ***************************************************************************************/
+
 test('sendMessage', (done) => {
   return loadGoodTest().then(() => {
     watcher.sendMessage("this is a pizza");
@@ -111,6 +117,7 @@ test('sendMessage', (done) => {
     done();
   });
 });
+
 
 test('/now positive result', (done) => {
   return loadGoodTest().then(() => {
@@ -197,6 +204,7 @@ test('/now bad parse + /clrerror', (done) => {
     done();
   });
 });
+
 
 test('/now near-duplicate no result', (done) => {
   return loadGoodTest().then(async () => {
@@ -612,4 +620,3 @@ test('test with actual web fetch', (done) => {
     done();
   })
 });
-

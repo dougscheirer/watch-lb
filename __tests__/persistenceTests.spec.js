@@ -74,6 +74,12 @@ afterEach(() => {
   sendMessages = [];
 });
 
+/***************************************************************************************
+ * 
+ * Begin tests
+ * 
+ ***************************************************************************************/
+
 test('default settings save', (done) => {
   return loadGoodTest().then(async () => {
     // verify that redis has the data
@@ -85,6 +91,7 @@ test('default settings save', (done) => {
     done();
   })
 });
+
 
 test('reloading works', async (done) => {
   var localClient = redis.createClient();
