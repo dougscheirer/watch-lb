@@ -275,10 +275,18 @@ function watchRuntime(options) {
       this.sendMessage(JSON.stringify(this.savedSettings));
     },
 
+    this.handleListErrors = async (msg, match) => {
+      const rows = await this.keysAsync('offer-invalid*');
+      if (rows.length == 0) {
+        return this.sendMessage("No errors found");
+      }
+      return this.sendMessage(rows.join("\n"));
+    },
+
     this.handleClearError = async (msg, match) => {
       if (match.length == 1) {
         const rows = await this.keysAsync('offer-invalid*');
-        for(var i = 0, j = rows.length; i < j; ++i) {
+        for (var i = 0, j = rows.length; i < j; ++i) {
           await this.client.del(rows[i]);
         }
         return this.sendMessage("Cleared all offer invalid keys")
@@ -529,6 +537,7 @@ function watchRuntime(options) {
   // /resume
   this.telegramApi.onText(/\/resume$/, this.handleResume);
   // errors
+  this.telegramApi.onText(/\/lserror/, this.handleListErrors);
   this.telegramApi.onText(/\/showerror (.+)/, this.handleShowError);
   this.telegramApi.onText(/\/clrerror$/, this.handleClearError);
   this.telegramApi.onText(/\/clrerror (.+)/, this.handleClearError);
@@ -544,6 +553,7 @@ function watchRuntime(options) {
       "/uptick (duration | default)\n" +
       "/pause [duration]\n" +
       "/resume\n" +
+      "/lserror\n" +
       "/showerror (key)\n" +
       "/clrerror [key]" + 
       "/help");

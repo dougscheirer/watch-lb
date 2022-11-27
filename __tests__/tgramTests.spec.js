@@ -156,6 +156,20 @@ test('/now bad parse', (done) => {
   });
 });
 
+test('/now bad parse + /lserror', (done) => {
+  const getAsync = promisify(redisClient.get).bind(redisClient);
+
+  return loadBadTest2().then(async () => {
+    await api.testTextReceived('/now');
+    sendMessages = [];
+    await api.testTextReceived('/lserror');
+    rx=/offer-invalid-(.*)/g;
+    const match = rx.exec(sendMessages[0].message);
+    expect(match.length).toEqual(2);
+    done();
+  });
+});
+
 test('/now bad parse + /showerror', (done) => {
   const getAsync = promisify(redisClient.get).bind(redisClient);
 
