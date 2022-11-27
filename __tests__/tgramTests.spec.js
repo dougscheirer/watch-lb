@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+
 const { watchRuntime } = require('../watchRuntime');
 const redis = require("redis-mock");
 const fs = require('fs');
@@ -161,6 +165,7 @@ test('/now bad parse + /showerror', (done) => {
 });
 
 test('/now bad parse + /clrerror N', (done) => {
+  const getAsync = promisify(redisClient.get).bind(redisClient);
   return loadBadTest2().then(async () => {
     await api.testTextReceived('/now');
     // expect a new redis value of 'offer-invalid-YYYYMMDDHHMMSS' with the bad test data
@@ -168,12 +173,16 @@ test('/now bad parse + /clrerror N', (done) => {
     const match = rx.exec(sendMessages[0].message);
     sendMessages = [];
     await api.testTextReceived('/clrerror ' + match[0]);
-    expect("Cleared " + match).toEqual(sendMessages[0].message);
+    expect("Cleared " + match[0]).toEqual(sendMessages[0].message);
+    // also fetch the value expect that it is not there
+    const val = await getAsync(match[0]);
+    expect(val).toBeFalsy();
     done();
   });
 });
 
 test('/now bad parse + /clrerror', (done) => {
+  const getAsync = promisify(redisClient.get).bind(redisClient);
   return loadBadTest2().then(async () => {
     await api.testTextReceived('/now');
     // expect a new redis value of 'offer-invalid-YYYYMMDDHHMMSS' with the bad test data
@@ -181,7 +190,10 @@ test('/now bad parse + /clrerror', (done) => {
     const match = rx.exec(sendMessages[0].message);
     sendMessages = [];
     await api.testTextReceived('/clrerror');
-    expect("Cleared all invalid offers").toEqual(sendMessages[0].message);
+    expect("Cleared all offer invalid keys").toEqual(sendMessages[0].message);
+    // also fetch the value expect that it is not there
+    const val = await getAsync(match[0]);
+    expect(val).toBeFalsy();
     done();
   });
 });
@@ -586,8 +598,7 @@ test('updated page test', (done) => {
     done();
   });
 });
-
-/* 
+ 
 test('test with actual web fetch', (done) => {
   initWatcher();
   return watcher.loadSettings(false).then(async () => {
@@ -601,4 +612,4 @@ test('test with actual web fetch', (done) => {
     done();
   })
 });
-*/
+

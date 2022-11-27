@@ -58,6 +58,7 @@ function watchRuntime(options) {
     this.chatid = options.chatid,
     this.getAsync = promisify(this.client.get).bind(this.client),
     this.setAsync = promisify(this.client.set).bind(this.client),
+    this.keysAsync = promisify(this.client.keys).bind(this.client),
     this.logger = options.logger,
     this.errorLogger = options.errorLogger,
     this.fetchUrlFunc = (options.fetchFunc) ? options.fetchFunc : this.fetchUrl;
@@ -269,17 +270,15 @@ function watchRuntime(options) {
 
     this.handleClearError = async (msg, match) => {
       if (match.length == 1) {
-        await this.client.keys('offer-invalid*', function(err, rows) {
-          for(var i = 0, j = rows.length; i < j; ++i) {
-            this.client.del(rows[i])
-          }
-        });
+        const rows = await this.keysAsync('offer-invalid*');
+        for(var i = 0, j = rows.length; i < j; ++i) {
+          await this.client.del(rows[i]);
+        }
         return this.sendMessage("Cleared all offer invalid keys")
       }
       // just the requested one
-      const delmsg = await this.client.del(match[1]);
-      // not sure what the retval is here
-      this.sendMessage("Cleared " + match[1]);
+      await this.client.del(match[1]);
+      return this.sendMessage("Cleared " + match[1]);
     },
 
     this.handleShowError = async (msg, match) => {
