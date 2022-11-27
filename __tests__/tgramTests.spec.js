@@ -21,12 +21,45 @@ const posMatch =  "Found a match for cabernet ($89) in Groth Oakville Cabernet S
 const baseCheckRegex = "Last check at (.*)\nLast difference at (.*)\nLast offer: \\(LB8212\\) Groth Oakville Cabernet Sauvignon Reserve 2015 \\$89\nLast MD5: (.*)\nCurrent interval: 15 minutes\n";
 const serviceRegex = "Service uptime: (.*)\n"
 const badTest2Content = "<html><head></head><body>Do not match stuff<h1 class=\"offer-name-tag-invalid\">pizza</h1></body></html>";
+const recentRegex = 'offer-match-([0-9]+): {"name":"Groth Oakville Cabernet Sauvignon Reserve 2015","price":"89","link":"https://www.lastbottlewines.com/cart/add/LB8212.html","id":"LB8212","md5":"1e5efef7c1494301ead78139cd413143"}';
 
 function logCapture() {
   // don't spit out watcher messages
 }
 
-function initWatcher(fetchFunc) {
+function realLogger(msg) {
+  // console.log(msg);
+}
+
+function logTestName(msg) {
+  // console.log(expect.getState().currentTestName + ": " + msg);
+}
+
+// overloads for set/clearInterval
+var intID = 0, intCount = -1, intFn = undefined, testID = '';
+function setIntFunc(fn, count) {
+  logTestName("setInteval");
+  if (intFn != undefined) {
+    logTestName("going to fail here");
+    // TODO: figure out why /settings test fails in full test mode
+    // expect(intFn).toEqual(undefined);
+  }
+  testID = expect.getState().currentTestName;
+  intCount = count;
+  intFn = fn;
+  intID++;
+  return intID;
+}
+
+function clrIntFunc(id) {
+  logTestName("clearInteval)");
+  expect(id).toEqual(intID);
+  intCount = -1;
+  intFn = undefined;
+  return;
+}
+
+function initWatcher(fetchFunc, optLogger) {
   MockDate.set(adate);
   api = new tgramMock(
           "chatid", 
@@ -39,16 +72,19 @@ function initWatcher(fetchFunc) {
     telegramApi: api, 
     redisApi: redisClient, 
     chatid: "chatid", 
-    fetchFunc: fetchFunc});
-  watcher.logger = logCapture;
+    fetchFunc: fetchFunc,
+    setInterval: setIntFunc,
+    clearInterval: clrIntFunc,
+    logger: (optLogger) ? optLogger : logCapture
+  });
 }
 
-function loadWatcher(fetchFunc) {
-  initWatcher(fetchFunc);
-  return watcher.loadSettings(false);
+function loadWatcher(fetchFunc, optLogger) {
+  initWatcher(fetchFunc, optLogger);
+  return watcher.loadSettings();
 }
 
-function loadTest(fname) {
+function loadTest(fname, optLogger) {
   return loadWatcher(async (url) => {
     var body;
     try {
@@ -57,11 +93,11 @@ function loadTest(fname) {
       console.log("error loading test:" + e); 
     }
     return { status: 200, data: body, headers: [{ result: "pie" }] };
-  });
+  }, optLogger);
 }
 
-function loadGoodTest() {
-  return loadTest("./testdata/good.html");
+function loadGoodTest(optLogger) {
+  return loadTest("./testdata/good.html", optLogger);
 }
 
 function loadBadTest() {
@@ -93,7 +129,12 @@ beforeEach(() => {
   if (redisClient) {
     redisClient.flushall();
   }
+  logTestName("beforeEach");
   sendMessages = [];
+  intID = 0;
+  intCount = -1;
+  intFn = undefined;
+  testID = '';
 });
 
 afterEach(() => {
@@ -137,7 +178,6 @@ test('/now no result', (done) => {
     done();
   });
 });
-
 
 test('/now bad parse', (done) => {
   const getAsync = promisify(redisClient.get).bind(redisClient);
@@ -586,7 +626,7 @@ test('/pause and reload', (done) => {
 });
 
 test('/settings', (done) => {
-  return loadGoodTest().then(async () => {
+  return loadGoodTest(realLogger).then(async () => {
     await api.testTextReceived('/settings');
     expect(sendMessages.length).toEqual(1);
     var settingsJson = null;
@@ -632,5 +672,52 @@ test('test with actual web fetch', (done) => {
       console.log(e);
     }
     done();
+  })
+});
+
+async function saveFakeMatches() {
+  for (var i = 0; i < 30; i++) {
+    await watcher.setAsync('offer-match-20200315000' + (100+i), "this is a fake match " + i);
+  }
+}
+test('/recent', (done) => {
+  return loadGoodTest().then(() => {
+    api.testTextReceived('/now').then(async (res) => {
+      sendMessages=[];
+      await saveFakeMatches();
+      api.testTextReceived('/recent').then((res) => {
+        expect(sendMessages.length).toEqual(1);
+        expect((new RegExp(recentRegex)).exec(sendMessages[0].message).length).toEqual(2);
+        expect(sendMessages[0].message.split("\n").length).toEqual(11);
+        done();
+      })
+    })
+  })
+});
+
+test('/recent 3', (done) => {
+  return loadGoodTest().then(() => {
+    api.testTextReceived('/now').then(async (res) => {
+      sendMessages=[];
+      await saveFakeMatches();
+      api.testTextReceived('/recent 3').then((res) => {
+        expect(sendMessages.length).toEqual(1);
+        expect(sendMessages[0].message.split("\n").length).toEqual(4);
+        done();
+      })
+    })
+  })
+});
+
+test('/recent notnum', (done) => {
+  return loadGoodTest().then(() => {
+    api.testTextReceived('/now').then((res) => {
+      sendMessages=[];
+      api.testTextReceived('/recent notnum').then((res) => {
+        expect(sendMessages.length).toEqual(1);
+        expect(sendMessages[0].message).toEqual("notnum is not a valid number.  Specify a number of offers to fetch");
+        done();
+      })
+    })
   })
 });

@@ -46,7 +46,11 @@ function watchRuntime(options) {
     options.logger = formattedLog;
   if (!options.errorLogger) 
     options.errorLogger = formattedLog;
-    
+  if (!options.setInterval)
+    options.setInterval = setInterval;
+  if (!options.clearInterval)
+    options.setInterval = clearInterval;
+
   // allow for fetchUrl and postUrl to be overridden in test mode
   // I could mock lib that too, but axios/jest mock had some hiccups
   this.fetchUrl = async (url) => {
@@ -65,8 +69,9 @@ function watchRuntime(options) {
     this.runtimeSettings = {
       intervalTimer: null,
       startTime: new Date(),
-      startedInterval: false
     },
+    this.setInterval = options.setInterval,
+    this.clearInterval = options.clearInterval,
 
     // Note: Date and other non-string objects must be converted from strings in loadSettings()
     this.savedSettings = {
@@ -210,15 +215,10 @@ function watchRuntime(options) {
       }
 
       // change the frequency of checks to (match) minutes
-      if (this.runtimeSettings.startedInterval) {
-        // only when not testing
-        clearInterval(this.runtimeSettings.intervalTimer);
-      }
+      this.clearInterval(this.runtimeSettings.intervalTimer);
       await this.checkWines();
-      if (this.runtimeSettings.startedInterval) {
-        // only when not testing
-        this.runtimeSettings.intervalTimer = setInterval(this.checkWines, number * 1000 * 60);
-      }
+      this.runtimeSettings.intervalTimer = this.setInterval(this.checkWines, number * 1000 * 60);
+
       // save the last setting
       this.savedSettings.defaultRate = number;
       await this.saveSettings();
@@ -273,6 +273,30 @@ function watchRuntime(options) {
 
     this.handleSettings = async (msg) => {
       this.sendMessage(JSON.stringify(this.savedSettings));
+    },
+
+    this.handleRecentOffers = async (msg, match) => {
+      // recent 10 or more?
+      var retCount = 10;
+      if (match.length == 2) {
+        retCount = parseInt(match[1]);
+      }
+
+      if (isNaN(retCount)) {
+        this.sendMessage(match[1] + " is not a valid number.  Specify a number of offers to fetch");
+        return;
+      }
+      // fetch all keys, then sort 
+      const rows = await this.keysAsync('offer-match*');
+      if (rows.length == 0) {
+        return this.sendMessage("No recent offer matches found");
+      }
+      const retRows = rows.sort().slice(-1*retCount);
+      var message = '';
+      for (i in retRows) {
+        message += retRows[i] + ": " + await this.getAsync(retRows[i]) + "\n";
+      }
+      return this.sendMessage(message);
     },
 
     this.handleListErrors = async (msg, match) => {
@@ -365,6 +389,11 @@ function watchRuntime(options) {
           pad2(dt.getSeconds());
     },
 
+    this.writeOffer = async (offerData) => {
+      const key = 'offer-match-' + toRedisDatestamp(new Date(Date.now()));
+      return this.setAsync(key, JSON.stringify(offerData));
+    }
+
     this.checkWines = async (reportNothing) => {
       this.savedSettings.lastIntervalUpdate = new Date();
       if (this.savedSettings.pauseUntil == 0) {
@@ -399,8 +428,7 @@ function watchRuntime(options) {
             const redisRecord = 'offer-invalid-' + toRedisDatestamp(new Date(Date.now()));
             this.logError("offer-name class not found, perhaps the page formatting has changed or there was a page load error: " + redisRecord);
             // save the fetched data to redis for later analysis
-            this.client.set(redisRecord, res.data);
-            return;
+            return this.setAsync(redisRecord, res.data);
           }
 
           // write hash to a local FS to tell when page has changed?
@@ -439,11 +467,13 @@ function watchRuntime(options) {
               const msg = "Found a match for " + this.savedSettings.matching[name] + " ($" + offerData.price + ") in " + offerData.name + "\nhttps://lastbottlewines.com";
               if (msg != this.savedSettings.lastMessage) {
                 this.sendMessage(msg)
-                  .then(function (data) {
+                  .then(async function (data) {
                     that.savedSettings.lastMessage = msg;
                     that.saveSettings();
                     that.logger("We got some data");
                     that.logger(data);
+                    // write this offer to storage
+                    await that.writeOffer(offerData);
                   })
                   .catch(function (err) {
                     that.logError(err);
@@ -462,7 +492,8 @@ function watchRuntime(options) {
     },
 
     /* jshint expr: true */
-    this.loadSettings = async (start) => {
+    this.loadSettings = async () => {
+      this.logger("loadSettings");
       return this.getAsync('watch-lb-settings').then(async (res) => {
         if (!res) {
           // initialize matching
@@ -494,11 +525,7 @@ function watchRuntime(options) {
           this.savedSettings.defaultRate = process.env.CHECK_RATE || DEFAULT_RATE;
           await this.saveSettings();
         }
-        this.runtimeSettings.startedInterval = (start == undefined || !!start);
-        if (this.runtimeSettings.startedInterval) {
-          // only when not testing
-          this.runtimeSettings.intervalTimer = setInterval(this.checkWines, 1000 * 60 * this.savedSettings.defaultRate);
-        }
+        this.runtimeSettings.intervalTimer = this.setInterval(this.checkWines, 1000 * 60 * this.savedSettings.defaultRate);
       });
     },
 
@@ -541,6 +568,9 @@ function watchRuntime(options) {
   this.telegramApi.onText(/\/showerror (.+)/, this.handleShowError);
   this.telegramApi.onText(/\/clrerror$/, this.handleClearError);
   this.telegramApi.onText(/\/clrerror (.+)/, this.handleClearError);
+  // recent
+  this.telegramApi.onText(/\/recent$/, this.handleRecentOffers);
+  this.telegramApi.onText(/\/recent (.+)/, this.handleRecentOffers);
   // /help
   this.telegramApi.onText(/\/help$/, () => {
     this.sendMessage("Commands:\n" +

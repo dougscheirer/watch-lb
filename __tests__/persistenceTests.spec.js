@@ -15,6 +15,23 @@ function logCapture() {
   // don't spit out watcher messages
 }
 
+// overloads for set/clearInterval
+var intID = 0, intCount = -1, intFn = undefined;
+function setIntFunc(fn, count) {
+  expect(intFn).toEqual(undefined);
+  intCount = count;
+  intFn = fn;
+  intID++;
+  return intID;
+}
+
+function clrIntFunc(id) {
+  expect(id).toEqual(intID);
+  intCount = -1;
+  intFn = undefined;
+  return;
+}
+
 function initWatcher(fetchFunc) {
   api = new tgramMock(
     "chatid", 
@@ -27,12 +44,15 @@ function initWatcher(fetchFunc) {
     chatid: "chatid",
     logger: logCapture,
     fetchFunc: fetchFunc,
-    errorLogger: logCapture});
+    errorLogger: logCapture,
+    setInterval: setIntFunc,
+    clearInterval: clrIntFunc
+  });
 }
 
 function loadWatcher(fetchFunc) {
   initWatcher(fetchFunc);
-  return watcher.loadSettings(false);
+  return watcher.loadSettings();
 }
 
 function loadGoodTest() {
@@ -66,6 +86,9 @@ function loadFetchError() {
 beforeEach(() => {
   sendMessages = [];
   redisClient.flushall();
+  intID = 0;
+  intCount = -1;
+  intFn = undefined;
 });
 
 afterEach(() => {
@@ -124,8 +147,12 @@ test('loading settings is identical', (done) => {
     await api.testTextReceived('/pause 5s');
     // clone the set data
     var settingObject = {...watcher.savedSettings};
+    // clear our tests for set/clearInterval
+    intCount = -1;
+    intFn = undefined;
+    intID = 0;
     // reload
-    await watcher.loadSettings(false);
+    await watcher.loadSettings();
     var settingObject2 = watcher.savedSettings;
     for (e in settingObject) {
       // console.log("matching " + e);
