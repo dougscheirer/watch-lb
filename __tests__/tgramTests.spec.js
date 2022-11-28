@@ -9,7 +9,7 @@ const tgramMock = require('../__mocks__/tgramMock');
 const MockDate = require("mockdate");
 const durationParser = require("parse-duration");
 const { promisify } = require('util');
-const tu = require('../__mocks__/testutils');
+const tu = require('../__utils__/testutils');
 
 // for use elsewhere
 const posMatch =  "Found a match for cabernet ($89) in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com";
@@ -18,22 +18,10 @@ const serviceRegex = "Service uptime: (.*)\n"
 const recentRegex = 'offer-match-([0-9]+): {"name":"Groth Oakville Cabernet Sauvignon Reserve 2015","price":"89","link":"https://www.lastbottlewines.com/cart/add/LB8212.html","id":"LB8212","md5":"1e5efef7c1494301ead78139cd413143"}';
 
 beforeEach(() => {
-  if (tu.redisClient) {
-    tu.redisClient.flushall();
-  }
-  tu.logTestName("beforeEach");
-  tu.sendMessages = [];
-  intID = 0;
-  intCount = -1;
-  intFn = undefined;
-  testID = '';
+  tu.reset();
 });
 
 afterEach(() => {
-  // console.log("SENT MESSAGES: ");
-  // console.log(tu.sendMessages);
-  tu.sendMessages = [];
-  watcher = null;
 });
 
 /***************************************************************************************

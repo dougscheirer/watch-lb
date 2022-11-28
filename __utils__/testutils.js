@@ -15,6 +15,17 @@ var TestUtils = {
     api: null,
     redisClient: redis.createClient(),
     badTest2Content: "<html><head></head><body>Do not match stuff<h1 class=\"offer-name-tag-invalid\">pizza</h1></body></html>",
+    getAsync: null,
+
+    reset: () => {
+        TestUtils.sendMessages = [];
+        if (TestUtils.redisClient) {
+            TestUtils.redisClient.flushall();
+        }
+        TestUtils.intID = 0;
+        TestUtils.intCount = -1;
+        TestUtils.intFn = undefined;
+    },
 
     logCapture: () => {
         // don't spit out watcher messages
@@ -35,23 +46,23 @@ var TestUtils = {
     testID: '',
     setIntFunc: (fn, count) => {
         TestUtils.logTestName("setInteval");
-        if (intFn != undefined) {
+        if (TestUtils.intFn != undefined) {
             TestUtils.logTestName("going to fail here");
             // TODO: figure out why /settings test fails in full test mode
             // expect(intFn).toEqual(undefined);
         }
-        testID = expect.getState().currentTestName;
-        intCount = count;
-        intFn = fn;
-        intID++;
-        return intID;
+        TestUtils.testID = expect.getState().currentTestName;
+        TestUtils.intCount = count;
+        TestUtils.intFn = fn;
+        TestUtils.intID++;
+        return TestUtils.intID;
     },
 
     clrIntFunc: (id) => {
         TestUtils.logTestName("clearInteval)");
-        expect(id).toEqual(intID);
-        intCount = -1;
-        intFn = undefined;
+        expect(id).toEqual(TestUtils.intID);
+        TestUtils.intCount = -1;
+        TestUtils.intFn = undefined;
         return;
     },
 
@@ -64,6 +75,7 @@ var TestUtils = {
         );
         // clean redis? 
         // client.del('watch-lb-settings');
+        TestUtils.getAsync = promisify(TestUtils.redisClient.get).bind(TestUtils.redisClient);
         TestUtils.watcher = new watchRuntime({
             telegramApi: TestUtils.api, 
             redisApi: TestUtils.redisClient, 
