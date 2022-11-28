@@ -5,8 +5,8 @@ Build:
   with git SHA: ` $ ./docker-build.sh`
 Install:  
 ` $ sudo systemd-install.sh`  
-Restart:  
-` $ docker-compose down`  
+Restart with updated image:  
+` $ docker-compose up -d`  
 Logs:  
 ` $ docker-compose logs`
  
