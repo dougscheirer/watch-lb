@@ -14,6 +14,7 @@ var TestUtils = {
     watcher: null,
     api: null,
     redisClient: redis.createClient(),
+    badTest2Content: "<html><head></head><body>Do not match stuff<h1 class=\"offer-name-tag-invalid\">pizza</h1></body></html>",
 
     logCapture: () => {
         // don't spit out watcher messages
@@ -67,7 +68,7 @@ var TestUtils = {
             telegramApi: TestUtils.api, 
             redisApi: TestUtils.redisClient, 
             chatid: "chatid", 
-            fetchFunc: TestUtils.fetchFunc,
+            fetchFunc: fetchFunc,
             setInterval: TestUtils.setIntFunc,
             clearInterval: TestUtils.clrIntFunc,
             logger: (optLogger) ? optLogger : TestUtils.logCapture
@@ -108,7 +109,7 @@ var TestUtils = {
     return TestUtils.loadWatcher(async (url) => {
         // console.log("got a call for " + url);
         return { status: 200, data: 
-            badTest2Content, 
+            TestUtils.badTest2Content, 
             headers: [{ result: "pie" }] };
         });
     },

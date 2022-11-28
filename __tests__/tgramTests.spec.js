@@ -15,7 +15,6 @@ const tu = require('../__mocks__/testutils');
 const posMatch =  "Found a match for cabernet ($89) in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com";
 const baseCheckRegex = "Last check at (.*)\nLast difference at (.*)\nLast offer: \\(LB8212\\) Groth Oakville Cabernet Sauvignon Reserve 2015 \\$89\nLast MD5: (.*)\nCurrent interval: 15 minutes\n";
 const serviceRegex = "Service uptime: (.*)\n"
-const badTest2Content = "<html><head></head><body>Do not match stuff<h1 class=\"offer-name-tag-invalid\">pizza</h1></body></html>";
 const recentRegex = 'offer-match-([0-9]+): {"name":"Groth Oakville Cabernet Sauvignon Reserve 2015","price":"89","link":"https://www.lastbottlewines.com/cart/add/LB8212.html","id":"LB8212","md5":"1e5efef7c1494301ead78139cd413143"}';
 
 beforeEach(() => {
@@ -84,7 +83,7 @@ test('/now bad parse', (done) => {
     rx=/offer-invalid-(.*)/g;
     const match = rx.exec(tu.sendMessages[0].message);
     const dump = await getAsync(match[0]);
-    expect(dump).toEqual(badTest2Content);
+    expect(dump).toEqual(tu.badTest2Content);
     done();
   });
 });
@@ -113,7 +112,7 @@ test('/now bad parse + /showerror', (done) => {
     const match = rx.exec(tu.sendMessages[0].message);
     tu.sendMessages = [];
     await tu.api.testTextReceived('/showerror ' + match[0]);
-    expect("Error " + match[0] + "\n" + badTest2Content).toEqual(tu.sendMessages[0].message);
+    expect("Error " + match[0] + "\n" + tu.badTest2Content).toEqual(tu.sendMessages[0].message);
     done();
   });
 });
@@ -418,7 +417,7 @@ test('/pause 2 weeks', (done) => {
     expect(regex2.test(tu.sendMessages[0].message)).toBeTruthy();
     expect(tu.sendMessages.length).toEqual(1);
     // advance clock >2 weeks
-    MockDate.set(new Date(adate).getTime() + durationParser("2 weeks") + durationParser("1 minute"));
+    MockDate.set(new Date(tu.adate).getTime() + durationParser("2 weeks") + durationParser("1 minute"));
     tu.sendMessages=[];
     await tu.watcher.checkWines(true);
     expect(tu.sendMessages[0].message).toEqual(posMatch);
@@ -442,7 +441,7 @@ test('/pause 1 day with datestamp', (done) => {
     expect(regex2.test(tu.sendMessages[0].message)).toBeTruthy();
     expect(tu.sendMessages.length).toEqual(1);
     // advance clock >1 day
-    MockDate.set(new Date(adate).getTime() + durationParser("1 day") + durationParser("1 minute"));
+    MockDate.set(new Date(tu.adate).getTime() + durationParser("1 day") + durationParser("1 minute"));
     tu.sendMessages=[];
     await tu.watcher.checkWines(true);
     expect(tu.sendMessages[0].message).toEqual(posMatch);
@@ -466,7 +465,7 @@ test('/pause 1 hour with timestamp', (done) => {
     expect(regex2.test(tu.sendMessages[0].message)).toBeTruthy();
     expect(tu.sendMessages.length).toEqual(1);
     // advance clock >1 day
-    MockDate.set(new Date(adate).getTime() + durationParser("1 day") + durationParser("1 minute"));
+    MockDate.set(new Date(tu.adate).getTime() + durationParser("1 day") + durationParser("1 minute"));
     tu.sendMessages=[];
     await tu.watcher.checkWines(true);
     expect(tu.sendMessages[0].message).toEqual(posMatch);
@@ -519,7 +518,8 @@ test('/pause and reload', (done) => {
 });
 
 test('/settings', (done) => {
-  return tu.loadGoodTest(realLogger).then(async () => {
+  // TODO: why does this load twice?
+  return tu.loadGoodTest(tu.realLogger).then(async () => {
     await tu.api.testTextReceived('/settings');
     expect(tu.sendMessages.length).toEqual(1);
     var settingsJson = null;
