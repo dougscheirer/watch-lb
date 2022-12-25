@@ -16,6 +16,8 @@ var TestUtils = {
     redisClient: redis.createClient(),
     badTest2Content: "<html><head></head><body>Do not match stuff<h1 class=\"offer-name-tag-invalid\">pizza</h1></body></html>",
     getAsync: null,
+    numSetIntCalls: 0,
+    numClrIntCalls: 0,
 
     reset: () => {
         TestUtils.sendMessages = [];
@@ -25,6 +27,8 @@ var TestUtils = {
         TestUtils.intID = 0;
         TestUtils.intCount = -1;
         TestUtils.intFn = undefined;
+        TestUtils.numSetIntCalls = 0;
+        TestUtils.numClrIntCalls = 0;
     },
 
     logCapture: () => {
@@ -45,7 +49,8 @@ var TestUtils = {
     intFn: undefined,
     testID: '',
     setIntFunc: (fn, count) => {
-        TestUtils.logTestName("setInteval");
+        TestUtils.logTestName("setInterval");
+        TestUtils.numSetIntCalls++;
         if (TestUtils.intFn != undefined) {
             TestUtils.logTestName("going to fail here");
             // TODO: figure out why /settings test fails in full test mode
@@ -60,6 +65,7 @@ var TestUtils = {
 
     clrIntFunc: (id) => {
         TestUtils.logTestName("clearInteval)");
+        TestUtils.numClrIntCalls++;
         expect(id).toEqual(TestUtils.intID);
         TestUtils.intCount = -1;
         TestUtils.intFn = undefined;

@@ -283,6 +283,9 @@ test('/uptick default', (done) => {
     // first message is match message from checkWines
     expect(tu.sendMessages.length).toEqual(2);
     expect(regex.test(tu.sendMessages[1].message)).toBeTruthy();
+    // make sure we got the expected number of calls to setInterval and clearInterval
+    expect(tu.numClrIntCalls).toEqual(1);
+    expect(tu.numSetIntCalls).toEqual(2);
     done();
   });
 });

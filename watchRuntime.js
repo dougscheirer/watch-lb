@@ -49,14 +49,18 @@ function watchRuntime(options) {
   if (!options.setInterval)
     options.setInterval = setInterval;
   if (!options.clearInterval)
-    options.setInterval = clearInterval;
+    options.clearInterval = clearInterval;
 
   // allow for fetchUrl and postUrl to be overridden in test mode
   // I could mock lib that too, but axios/jest mock had some hiccups
   this.fetchUrl = async (url) => {
     return axios.get(url);
   };
-  
+
+  this.logCmd = (cmd) => {
+    this.logger("Command: " + cmd.text);
+  }
+
   this.telegramApi = options.telegramApi,
     this.client = options.redisApi,
     this.chatid = options.chatid,
@@ -99,6 +103,7 @@ function watchRuntime(options) {
     },
 
     this.handleStart = async (msg) => {
+      this.logCmd(msg);
       const chatId = msg.chat.id;
 
       this.sendMessage("Your chat id is " + chatId);
@@ -106,11 +111,13 @@ function watchRuntime(options) {
 
     // /list
     this.handleList = async (msg) => {
+      this.logCmd(msg);
       this.sendList();
     },
 
     // /list default
     this.handleListDefault = async (msg) => {
+      this.logCmd(msg);
       await this.saveSettings({ matching: matching_default.slice() });
       this.logger("Restored default list");
       this.sendList();
@@ -118,6 +125,7 @@ function watchRuntime(options) {
 
     // /status
     this.handleStatus = async (msg) => {
+      this.logCmd(msg);
       const duration = mjs.duration(this.savedSettings.lastIntervalUpdate - this.savedSettings.lastMD5Update);
       var msgResp = "Never checked\n";
       if (this.savedSettings.lastMD5Update != null) {
@@ -148,6 +156,7 @@ function watchRuntime(options) {
 
     // /add (term)
     this.handleAdd = async (msg, match) => {
+      this.logCmd(msg);
       const toAdd = match[1].toLowerCase();
       if (this.savedSettings.matching.indexOf(toAdd) >= 0) {
         this.sendMessage(toAdd + " is already a search term");
@@ -168,6 +177,7 @@ function watchRuntime(options) {
 
     // /del (term)
     this.handleDelete = async (msg, match) => {
+      this.logCmd(msg);
       const toDel = match[1].toLowerCase();
       if (this.savedSettings.matching.indexOf(toDel) < 0) {
         this.sendMessage(toDel + " is not a search term");
@@ -189,11 +199,13 @@ function watchRuntime(options) {
 
     // /now
     this.handleNow = async (msg) => {
+      this.logCmd(msg);
       return this.checkWines(true);
     },
 
     // /uptick (human-readable time | default)"
     this.handleUptick = async (msg, match) => {
+      this.logCmd(msg);
       var number = null;
       if (match[1] == "default") {
         number = DEFAULT_RATE;
@@ -224,6 +236,7 @@ function watchRuntime(options) {
     },
 
     this.handlePause = async (msg, match) => {
+      this.logCmd(msg);
       var duration = null;
       var datestamp = null;
       var timestamp = null;
@@ -263,15 +276,18 @@ function watchRuntime(options) {
     },
 
     this.handleResume = async (msg) => {
+      this.logCmd(msg);
       await this.saveSettings({ pauseUntil: -1 });
       this.sendMessage("Resuming with check interval of " + mjs.duration(this.savedSettings.defaultRate * 1000 * 60).humanize());
     },
 
     this.handleSettings = async (msg) => {
+      this.logCmd(msg);
       this.sendMessage(JSON.stringify(this.savedSettings));
     },
 
     this.handleRecentOffers = async (msg, match) => {
+      this.logCmd(msg);
       // recent 10 or more?
       var retCount = 10;
       if (match.length == 2) {
@@ -296,6 +312,7 @@ function watchRuntime(options) {
     },
 
     this.handleListErrors = async (msg, match) => {
+      this.logCmd(msg);
       const rows = await this.keysAsync('offer-invalid*');
       if (rows.length == 0) {
         return this.sendMessage("No errors found");
@@ -304,6 +321,7 @@ function watchRuntime(options) {
     },
 
     this.handleClearError = async (msg, match) => {
+      this.logCmd(msg);
       if (match.length == 1) {
         const rows = await this.keysAsync('offer-invalid*');
         for (var i = 0, j = rows.length; i < j; ++i) {
@@ -317,6 +335,7 @@ function watchRuntime(options) {
     },
 
     this.handleShowError = async (msg, match) => {
+      this.logCmd(msg);
       if (match.length != 2) {
         return this.sendMessage("/showerror requires an error key");
       }
@@ -581,7 +600,8 @@ function watchRuntime(options) {
   });
   // /settings
   this.telegramApi.onText(/\/settings$/, this.handleSettings);
-  this.telegramApi.onText(/\/*/, () => {
+  this.telegramApi.onText(/\/*/, (msg, match) => {
+    this.logCmd(msg);
     this.sendMessage("Unknown command");
   })
 }
