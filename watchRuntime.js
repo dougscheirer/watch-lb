@@ -58,6 +58,10 @@ function watchRuntime(options) {
   };
 
   this.logCmd = (cmd) => {
+    if (!cmd.text) {
+      this.logger("Undefined cnd.text");
+      this.logger(cmd);
+    }
     this.logger("Command: " + cmd.text);
   }
 
@@ -71,7 +75,7 @@ function watchRuntime(options) {
     this.errorLogger = options.errorLogger,
     this.fetchUrlFunc = (options.fetchFunc) ? options.fetchFunc : this.fetchUrl;
     this.runtimeSettings = {
-      intervalTimer: null,
+      intervalTimer: -1,
       startTime: new Date(),
     },
     this.setInterval = options.setInterval,
@@ -506,11 +510,13 @@ function watchRuntime(options) {
     this.loadSettings = async () => {
       this.logger("loadSettings");
       return this.getAsync('watch-lb-settings').then(async (res) => {
+        this.logger("Inside getAsync.then");
         if (!res) {
           // initialize matching
           this.logger("Initializing from defaults");
           await this.saveSettings();
         } else {
+          this.logger("Loading saved settings");
           var loaded = JSON.parse(res);
           // merge with our settings
           for (var setting in this.savedSettings) {
@@ -535,6 +541,10 @@ function watchRuntime(options) {
         if (!this.savedSettings.defaultRate) {
           await this.saveSettings({ defaultRate: process.env.CHECK_RATE || DEFAULT_RATE });
         }
+        if (this.runtimeSettings.intervalTimer > 0) {
+          this.clearInterval(this.runtimeSettings.intervalTimer);
+        }
+        this.logger("setting the interval");
         this.runtimeSettings.intervalTimer = this.setInterval(this.checkWines, 1000 * 60 * this.savedSettings.defaultRate);
       });
     },
@@ -546,7 +556,8 @@ function watchRuntime(options) {
     // shutdown
     this.stop = () => {
       this.sendMessage("Watcher is shutting down");
-      clearInterval(this.runtimeSettings.intervalTimer);
+      this.clearInterval(this.runtimeSettings.intervalTimer);
+      this.runtimeSettings.intervalTimer = -1;
     };
 
 

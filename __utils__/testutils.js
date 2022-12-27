@@ -31,16 +31,17 @@ var TestUtils = {
         TestUtils.numClrIntCalls = 0;
     },
 
-    logCapture: () => {
+    logCapture: (msg) => {
+        // console.log(expect.getState().currentTestName + ": " + msg);
         // don't spit out watcher messages
     },
 
     realLogger: (msg) => {
-    // console.log(msg);
+      // console.log(expect.getState().currentTestName + ": " + msg);
     },
 
     logTestName: (msg) => {
-    // console.log(expect.getState().currentTestName + ": " + msg);
+     // console.log(expect.getState().currentTestName + ": " + msg);
     },
 
     // overloads for set/clearInterval
@@ -48,13 +49,14 @@ var TestUtils = {
     intCount: -1,
     intFn: undefined,
     testID: '',
+    callbacks: [],
     setIntFunc: (fn, count) => {
         TestUtils.logTestName("setInterval");
         TestUtils.numSetIntCalls++;
         if (TestUtils.intFn != undefined) {
-            TestUtils.logTestName("going to fail here");
+            TestUtils.logTestName("going to fail here: " + TestUtils.intID);
             // TODO: figure out why /settings test fails in full test mode
-            // expect(intFn).toEqual(undefined);
+            expect(TestUtils.intFn).toEqual(undefined);
         }
         TestUtils.testID = expect.getState().currentTestName;
         TestUtils.intCount = count;
@@ -66,7 +68,9 @@ var TestUtils = {
     clrIntFunc: (id) => {
         TestUtils.logTestName("clearInteval)");
         TestUtils.numClrIntCalls++;
-        expect(id).toEqual(TestUtils.intID);
+        if (id != TestUtils.intID) {
+            expect(id).toEqual(TestUtils.intID);
+        }
         TestUtils.intCount = -1;
         TestUtils.intFn = undefined;
         return;

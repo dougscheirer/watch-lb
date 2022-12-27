@@ -16,7 +16,7 @@ function tgramMock(chatId, cb, options) {
       }
       // reset index so we start at the beginning of the regex each time
       reg.regex.lastIndex = 0;
-      await reg.callback(this.msg, text.match(reg.regex));
+      await reg.callback({ text: text, ...this.msg }, text.match(reg.regex));
       return;
     };
   },

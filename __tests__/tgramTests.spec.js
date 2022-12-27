@@ -22,6 +22,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  tu.reset();
 });
 
 /***************************************************************************************
@@ -272,6 +273,9 @@ test('/uptick 1d', (done) => {
     // first message is match message from checkWines
     expect(tu.sendMessages.length).toEqual(2);
     expect(regex.test(tu.sendMessages[1].message)).toBeTruthy();
+    // make sure we got the expected number of calls to setInterval and clearInterval
+    expect(tu.numClrIntCalls).toEqual(1);
+    expect(tu.numSetIntCalls).toEqual(2);
     done();
   });
 });
@@ -495,7 +499,8 @@ test('/pause and reload', (done) => {
     expect(regex2.test(tu.sendMessages[0].message)).toBeTruthy();
     expect(tu.sendMessages.length).toEqual(1);
     // reload
-    tu.watcher.loadSettings(false);
+    tu.watcher.stop();
+    await tu.watcher.loadSettings(false);
     tu.sendMessages=[];
     tu.watcher.checkWines(true);
     tu.sendMessages=[];
@@ -509,7 +514,6 @@ test('/pause and reload', (done) => {
 });
 
 test('/settings', (done) => {
-  // TODO: why does this load twice?
   return tu.loadGoodTest(tu.realLogger).then(async () => {
     await tu.api.testTextReceived('/settings');
     expect(tu.sendMessages.length).toEqual(1);
@@ -544,7 +548,7 @@ test('updated page test', (done) => {
     done();
   });
 });
- 
+ /*
 test('test with actual web fetch', (done) => {
   tu.initWatcher();
   return tu.watcher.loadSettings(false).then(async () => {
@@ -558,7 +562,7 @@ test('test with actual web fetch', (done) => {
     done();
   })
 });
-
+*/
 async function saveFakeMatches() {
   for (var i = 0; i < 30; i++) {
     await tu.watcher.setAsync('offer-match-20200315000' + (100+i), "this is a fake match " + i);

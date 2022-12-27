@@ -5,6 +5,7 @@ const fs = require('fs');
 const tgramMock = require('../__mocks__/tgramMock');
 const { promisify } = require('util');
 const tu = require('../__utils__/testutils');
+const { watcher } = require('../__utils__/testutils');
 
 beforeEach(() => {
   tu.reset();
@@ -64,9 +65,10 @@ test('loading settings is identical', (done) => {
     // clone the set data
     var settingObject = {...tu.watcher.savedSettings};
     // clear our tests for set/clearInterval
-    intCount = -1;
-    intFn = undefined;
-    intID = 0;
+    tu.watcher.stop();
+    tu.intCount = -1;
+    tu.intFn = undefined;
+    tu.intID = 0;
     // reload
     await tu.watcher.loadSettings();
     var settingObject2 = tu.watcher.savedSettings;
