@@ -548,7 +548,7 @@ test('updated page test', (done) => {
     done();
   });
 });
- /*
+
 test('test with actual web fetch', (done) => {
   tu.initWatcher();
   return tu.watcher.loadSettings(false).then(async () => {
@@ -562,7 +562,7 @@ test('test with actual web fetch', (done) => {
     done();
   })
 });
-*/
+
 async function saveFakeMatches() {
   for (var i = 0; i < 30; i++) {
     await tu.watcher.setAsync('offer-match-20200315000' + (100+i), "this is a fake match " + i);
