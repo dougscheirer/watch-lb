@@ -36,21 +36,6 @@ function watchRuntime(options) {
     console.log(mjs().format() + ": " + out);
   }
 
-  if (!options.telegramApi)
-    throw new Error("telegramApi is required");
-  if (!options.redisApi)
-     throw new Error("redis client is required");
-  if (!options.chatid) 
-    options.chatid = process.env.CHAT_ID;
-  if (!options.logger) 
-    options.logger = formattedLog;
-  if (!options.errorLogger) 
-    options.errorLogger = formattedLog;
-  if (!options.setInterval)
-    options.setInterval = setInterval;
-  if (!options.clearInterval)
-    options.clearInterval = clearInterval;
-
   // allow for fetchUrl and postUrl to be overridden in test mode
   // I could mock lib that too, but axios/jest mock had some hiccups
   this.fetchUrl = async (url) => {
@@ -65,21 +50,35 @@ function watchRuntime(options) {
     this.logger("Command: " + cmd.text);
   }
 
-  this.telegramApi = options.telegramApi,
-    this.client = options.redisApi,
-    this.chatid = options.chatid,
+  var filledOpts = {};
+  if (!options.telegramApi)
+    throw new Error("telegramApi is required");
+  if (!options.redisApi)
+     throw new Error("redis client is required");
+  filledOpts.telegramApi = options.telegramApi;
+  filledOpts.redisApi = options.redisApi;
+  filledOpts.chatid = options.chatid | process.env.CHAT_ID;
+  filledOpts.logger = options.logger ? options.logger : formattedLog;
+  filledOpts.errorLogger = options.errorLogger ? options.errorLogger : formattedLog;
+  filledOpts.setInterval = options.setInterval ? options.setInterval : setInterval;
+  filledOpts.clearInterval = options.clearInterval ? options.clearInterval : clearInterval;
+  filledOpts.fetchFunc = options.fetchFunc ? options.fetchFunc : this.fetchUrl;
+
+  this.telegramApi = filledOpts.telegramApi,
+    this.client = filledOpts.redisApi,
+    this.chatid = filledOpts.chatid,
     this.getAsync = promisify(this.client.get).bind(this.client),
     this.setAsync = promisify(this.client.set).bind(this.client),
     this.keysAsync = promisify(this.client.keys).bind(this.client),
-    this.logger = options.logger,
-    this.errorLogger = options.errorLogger,
-    this.fetchUrlFunc = (options.fetchFunc) ? options.fetchFunc : this.fetchUrl;
+    this.logger = filledOpts.logger,
+    this.errorLogger = filledOpts.errorLogger,
+    this.fetchUrlFunc = filledOpts.fetchFunc,
     this.runtimeSettings = {
       intervalTimer: -1,
       startTime: new Date(),
     },
-    this.setInterval = options.setInterval,
-    this.clearInterval = options.clearInterval,
+    this.setInterval = filledOpts.setInterval,
+    this.clearInterval = filledOpts.clearInterval,
 
     // Note: Date and other non-string objects must be converted from strings in loadSettings()
     this.savedSettings = {

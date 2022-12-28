@@ -25,8 +25,7 @@ var TestUtils = {
             TestUtils.redisClient.flushall();
         }
         TestUtils.intID = 0;
-        TestUtils.intCount = -1;
-        TestUtils.intFn = undefined;
+        TestUtils.callbacks = [];
         TestUtils.numSetIntCalls = 0;
         TestUtils.numClrIntCalls = 0;
     },
@@ -47,33 +46,61 @@ var TestUtils = {
     // overloads for set/clearInterval
     intID: 0,
     intCount: -1,
-    intFn: undefined,
     testID: '',
     callbacks: [],
     setIntFunc: (fn, count) => {
-        TestUtils.logTestName("setInterval");
-        TestUtils.numSetIntCalls++;
-        if (TestUtils.intFn != undefined) {
-            TestUtils.logTestName("going to fail here: " + TestUtils.intID);
-            // TODO: figure out why /settings test fails in full test mode
-            expect(TestUtils.intFn).toEqual(undefined);
-        }
-        TestUtils.testID = expect.getState().currentTestName;
-        TestUtils.intCount = count;
-        TestUtils.intFn = fn;
-        TestUtils.intID++;
+    TestUtils.numSetIntCalls++;
+    TestUtils.testID = expect.getState().currentTestName;
+	TestUtils.intID++;
+        TestUtils.callbacks.push({lastActive: Date.now(), callback: fn, interval: count, id: TestUtils.intID });
         return TestUtils.intID;
     },
 
     clrIntFunc: (id) => {
         TestUtils.logTestName("clearInteval)");
         TestUtils.numClrIntCalls++;
-        if (id != TestUtils.intID) {
-            expect(id).toEqual(TestUtils.intID);
+        var toDel = -1;
+	    for (var i = 0; i < TestUtils.callbacks.length; i++) {
+		    if (TestUtils.callbacks[i].id == id) {
+			    toDel = i;
+    			break;
+	    	}
         }
-        TestUtils.intCount = -1;
-        TestUtils.intFn = undefined;
+        expect(toDel).not.toEqual(-1);
+        TestUtils.callbacks.splice(toDel, 1);
         return;
+    },
+
+    advanceClock: async (ms) => {
+    	// find the next timeout that will activate during the advance
+        var newDate = Date.now() + ms;
+        if (TestUtils.callbacks.length == 0) { 
+            return;
+        }
+
+        while (Date.now() < newDate) {
+            // find things to activate
+            // create an array sorted by the next thing to activate
+            var sorted = [];
+            const now = Date.now();
+            for (var i = 0; i < TestUtils.callbacks.length; i++) {
+                sorted.push({ nextActive: TestUtils.callbacks[i].lastActive + TestUtils.callbacks[i].interval - now, index: i });
+            }
+            sorted.sort( (a,b) => { return (a.nextActive < b.nextActive); });
+            // just advance the time if nothing will activate
+            if (sorted[0].nextActive + now > newDate) {
+                MockDate.set(newDate);
+                return;
+            }   
+            // activate everything set for sorted[0]'s time
+            MockDate.set(sorted[0].nextActive + now);
+            var i = 0;
+            while (i < sorted.length && sorted[i].nextActive == sorted[0].nextActive) {
+                await TestUtils.callbacks[sorted[i].index].callback();
+                TestUtils.callbacks[sorted[i].index].lastActive = Date.now();
+                i++;
+            }
+        }
     },
 
     initWatcher: (fetchFunc, optLogger) => {

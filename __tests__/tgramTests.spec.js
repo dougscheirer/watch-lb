@@ -609,3 +609,22 @@ test('/recent notnum', (done) => {
     })
   })
 });
+
+test('interval is working', (done) => {
+  return tu.loadGoodTest().then(async () => {
+    await tu.watcher.checkWines(true);
+    tu.sendMessages = [];
+    tu.api.testTextReceived('/status').then(async (res) => {
+      const first = tu.sendMessages;
+      expect(tu.sendMessages.length).toEqual(1);
+      tu.sendMessages = [];
+      await tu.advanceClock(15 * 60 * 1000);
+      // last checked should be advanced
+      tu.api.testTextReceived('/status').then((res2) => {
+        expect(tu.sendMessages.length).toEqual(1);
+        expect(tu.sendMessages[0]).not.toEqual(first[0]);
+        done();
+      });
+    });
+  });
+});
