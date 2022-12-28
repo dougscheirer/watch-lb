@@ -49,10 +49,17 @@ var TestUtils = {
     testID: '',
     callbacks: [],
     setIntFunc: (fn, count) => {
-    TestUtils.numSetIntCalls++;
-    TestUtils.testID = expect.getState().currentTestName;
-	TestUtils.intID++;
+        TestUtils.numSetIntCalls++;
+        TestUtils.testID = expect.getState().currentTestName;
+        TestUtils.intID++;
         TestUtils.callbacks.push({lastActive: Date.now(), callback: fn, interval: count, id: TestUtils.intID });
+        return TestUtils.intID;
+    },
+
+    setTimeoutFunc: (fn, count) => {
+        TestUtils.testID = expect.getState().currentTestName;
+        TestUtils.intID++;
+        TestUtils.callbacks.push({lastActive: Date.now(), callback: fn, interval: count, id: TestUtils.intID, oneshot: true });
         return TestUtils.intID;
     },
 
@@ -71,9 +78,11 @@ var TestUtils = {
         return;
     },
 
-    advanceClock: async (ms) => {
+    advanceClock: async (val) => {
     	// find the next timeout that will activate during the advance
-        var newDate = Date.now() + ms;
+        var newDate = (Object.prototype.toString.call(val) === '[object Date]') ? 
+                        val : Date.now() + val;
+
         if (TestUtils.callbacks.length == 0) { 
             return;
         }
@@ -86,7 +95,7 @@ var TestUtils = {
             for (var i = 0; i < TestUtils.callbacks.length; i++) {
                 sorted.push({ nextActive: TestUtils.callbacks[i].lastActive + TestUtils.callbacks[i].interval - now, index: i });
             }
-            sorted.sort( (a,b) => { return (a.nextActive < b.nextActive); });
+            sorted.sort( (a,b) => { return (a.nextActive - b.nextActive); });
             // just advance the time if nothing will activate
             if (sorted[0].nextActive + now > newDate) {
                 MockDate.set(newDate);
@@ -95,10 +104,19 @@ var TestUtils = {
             // activate everything set for sorted[0]'s time
             MockDate.set(sorted[0].nextActive + now);
             var i = 0;
+            var toRemove = [];
             while (i < sorted.length && sorted[i].nextActive == sorted[0].nextActive) {
                 await TestUtils.callbacks[sorted[i].index].callback();
-                TestUtils.callbacks[sorted[i].index].lastActive = Date.now();
+                if (!!TestUtils.callbacks[sorted[i].index].oneshot) {
+                    toRemove.push(sorted[i].index);
+                } else {
+                    TestUtils.callbacks[sorted[i].index].lastActive = Date.now();
+                }
                 i++;
+            }
+            // remove one shot timeouts from last to first
+            for (var i = toRemove.length - 1; i >= 0; i--) {
+                TestUtils.callbacks.splice(i, 1);
             }
         }
     },
