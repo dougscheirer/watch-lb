@@ -440,6 +440,7 @@ function watchRuntime(options) {
           // parse the body and look for the offer-name class
           // catch parse errors?  I think those just end up as roots with no data
           const offerData = this.parseOffer(res.data);
+          this.logger("Offer: " + JSON.stringify(offerData));
 
           if (!offerData.name) {
             const redisRecord = 'offer-invalid-' + toRedisDatestamp(new Date(Date.now()));
@@ -605,7 +606,7 @@ function watchRuntime(options) {
       "/resume\n" +
       "/lserror\n" +
       "/showerror (key)\n" +
-      "/clrerror [key]" + 
+      "/clrerror [key]\n" + 
       "/help");
   });
   // /settings
