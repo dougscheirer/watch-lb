@@ -485,7 +485,7 @@ function watchRuntime(options) {
                 this.sendMessage(msg)
                   .then(async function (data) {
                     that.saveSettings({ lastMessage: msg });
-                    that.logger("We got some data");
+                    // that.logger("We got some data");
                     that.logger(data);
                     // write this offer to storage
                     await that.writeOffer(offerData);
