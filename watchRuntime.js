@@ -307,7 +307,7 @@ function watchRuntime(options) {
         return this.sendMessage("No recent offer matches found");
       }
       const retRows = rows.sort().slice(-1*retCount);
-      var message = '';
+      var message = 'Fetched ' + retRows + ' offers';
       for (i in retRows) {
         message += retRows[i] + ": " + await this.getAsync(retRows[i]) + "\n";
       }
@@ -412,10 +412,10 @@ function watchRuntime(options) {
       return this.setAsync(key, JSON.stringify(offerData));
     }
 
-    this.checkWines = async (reportNothing) => {
+    this.checkWines = async (verbose) => {
       this.savedSettings.lastIntervalUpdate = new Date();
       if (this.savedSettings.pauseUntil == 0) {
-        if (reportNothing) {
+        if (verbose) {
           this.sendMessage("Paused, use /resume to restart");
         }
         return; // we're paused
@@ -423,7 +423,7 @@ function watchRuntime(options) {
         if (this.savedSettings.lastIntervalUpdate > this.savedSettings.pauseUntil) {
           await this.saveSettings({ pauseUntil: -1 });
         } else {
-          if (reportNothing) {
+          if (verbose) {
             this.sendMessage("Paused, will resume on " + this.savedSettings.pauseUntil);
           }
           return; // we're paused
@@ -449,9 +449,8 @@ function watchRuntime(options) {
             return this.setAsync(redisRecord, res.data);
           }
 
-          // write hash to a local FS to tell when page has changed?
-          // TODO: compare the offerID instead?
-          if (!reportNothing && offerData.md5 == this.savedSettings.lastMD5) {
+          // non-verbose just logs and forgets
+          if (!verbose && offerData.md5 == this.savedSettings.lastMD5) {
             this.logger("No changes since last update");
             if (this.savedSettings.lastMD5Update != null) {
               this.logger("Time since last change: " + ((new Date()) - this.savedSettings.lastMD5Update));
@@ -464,6 +463,9 @@ function watchRuntime(options) {
             return;
           }
 
+          // cache this for later when we decide on notification
+          const lastOfferID = this.savedSettings.lastOfferID;
+
           // remember the MD5 and if we have sent our message
           await this.saveSettings({ 
             sent24hrMessage: false,
@@ -473,31 +475,46 @@ function watchRuntime(options) {
             lastOfferName: offerData.name,
             lastOfferPrice: offerData.price,
           });
-    
+
+          // sometimes they change the content slightly for things we already notified on
+          // if this is a regular interval check (non-verbose) then do not send a message, just log
+          if (offerData.id == lastOfferID && !verbose) {
+            this.logger("Identical offer id on new match, skipping.");
+            return;
+          }
+
+          // just match on the first one, then stop
+          var match = null;
           for (var name in this.savedSettings.matching) {
             if (res.data.match(new RegExp("\\b" + this.savedSettings.matching[name] + "\\b", "i"))) {
-              const that = this;
-              // remember the offer name for verification check on /buy
-              await this.saveSettings({ lastMatch: offerData.name });
-              // format the message and compare to the last one, if they are identical just skip it
-              const msg = "Found a match for " + this.savedSettings.matching[name] + " ($" + offerData.price + ") in " + offerData.name + "\nhttps://lastbottlewines.com";
-              if (msg != this.savedSettings.lastMessage) {
-                this.sendMessage(msg)
-                  .then(async function (data) {
-                    that.saveSettings({ lastMessage: msg });
-                    // that.logger("We got some data");
-                    that.logger(data);
-                    // write this offer to storage
-                    await that.writeOffer(offerData);
-                  })
-                  .catch(function (err) {
-                    that.logError(err);
-                  });
-                return;
-              }
+              match = name;
+              break;
             }
           }
-          if (!!reportNothing)
+
+          if (match != null) {
+            const that = this;
+            // remember the offer name for verification check on /buy
+            await this.saveSettings({ lastMatch: offerData.name });
+            // format the message and compare to the last one, if they are identical just skip it
+            const msg = "Found a match for " + this.savedSettings.matching[match] + " ($" + offerData.price + ") in " + offerData.name + "\nhttps://lastbottlewines.com";
+            // verbose means always report
+            if (verbose || msg != this.savedSettings.lastMessage) {
+              this.sendMessage(msg)
+                .then(async function (data) {
+                  that.saveSettings({ lastMessage: msg });
+                  that.logger(data);
+                  // write this offer to storage
+                  await that.writeOffer(offerData);
+                })
+                .catch(function (err) {
+                  that.logError(err);
+                });
+                return;
+            }
+          }
+
+          if (verbose)
             this.sendMessage("No matching terms in '" + offerData.name + "'");
             this.logger("No matching terms for '" + offerData.name + "'");
         })

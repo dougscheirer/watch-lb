@@ -18,6 +18,7 @@ var TestUtils = {
     getAsync: null,
     numSetIntCalls: 0,
     numClrIntCalls: 0,
+    logLines: [],
 
     reset: () => {
         TestUtils.sendMessages = [];
@@ -28,11 +29,13 @@ var TestUtils = {
         TestUtils.callbacks = [];
         TestUtils.numSetIntCalls = 0;
         TestUtils.numClrIntCalls = 0;
+        TestUtils.logLines = [];
     },
 
     logCapture: (msg) => {
         // console.log(expect.getState().currentTestName + ": " + msg);
         // don't spit out watcher messages
+        TestUtils.logLines.push(msg);
     },
 
     realLogger: (msg) => {
@@ -151,9 +154,9 @@ var TestUtils = {
       return TestUtils.loadWatcher(async (url) => {
         var body;
         try {
-        body = fs.readFileSync(fname).toString();
+            body = fs.readFileSync(fname).toString();
         } catch (e) { 
-        console.log("error loading test:" + e); 
+            console.log("error loading test:" + e); 
         }
         return { status: 200, data: body, headers: [{ result: "pie" }] };
         }, optLogger);
@@ -161,6 +164,10 @@ var TestUtils = {
 
     loadGoodTest: (optLogger) => {
         return TestUtils.loadTest("./testdata/good.html", optLogger);
+    },
+
+    loadNearlyIdenticalTest: (optLogger) => {
+        return TestUtils.loadTest("./testdata/good-modified-content.html", optLogger);
     },
 
     loadBadTest: () => {

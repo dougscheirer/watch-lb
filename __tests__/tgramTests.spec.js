@@ -628,3 +628,62 @@ test('interval is working', (done) => {
     });
   });
 });
+
+test('/now twice in a row', (done) => {
+  return tu.loadGoodTest().then(() => {
+    tu.api.testTextReceived('/now').then((res) => {
+      expect(tu.sendMessages[0].message).toEqual(posMatch);
+      expect(tu.sendMessages.length).toEqual(1);
+      tu.sendMessages = [];
+      // do it again
+      tu.api.testTextReceived('/now').then((res) => {
+        expect(tu.sendMessages[0].message).toEqual(posMatch);
+        expect(tu.sendMessages.length).toEqual(1);
+        done();
+      });
+    });
+  });
+});
+
+test('/now changed content by same offer ID', (done) => {
+  return tu.loadGoodTest().then(() => {
+    tu.api.testTextReceived('/now').then((res) => {
+      expect(tu.sendMessages[0].message).toEqual(posMatch);
+      expect(tu.sendMessages.length).toEqual(1);
+      // load another with different content but the same offerID
+      tu.sendMessages = [];
+      tu.loadNearlyIdenticalTest().then(() => {
+          tu.api.testTextReceived('/now').then((res) => {
+          // '/now' forces output
+          expect(tu.sendMessages.length).toEqual(1);
+          expect(tu.sendMessages[0].message).toEqual(posMatch);
+          done();
+        });
+      });
+    });
+  });
+});
+
+test('/now followed by interval with changed content by same offer ID', (done) => {
+  return tu.loadGoodTest().then(() => {
+    tu.api.testTextReceived('/now').then((res) => {
+      expect(tu.sendMessages[0].message).toEqual(posMatch);
+      expect(tu.sendMessages.length).toEqual(1);
+      // load another with different content but the same offerID
+      tu.loadNearlyIdenticalTest().then(async () => {
+        // advance clock > 15 min to activate interval check
+        MockDate.set(new Date(tu.adate).getTime() + durationParser("1 hour"));
+        tu.sendMessages=[];
+        tu.logLines=[];
+        // check with false to not force output
+        await tu.watcher.checkWines(false);
+        // should be no message but it will write to the log
+        expect(tu.sendMessages.length).toEqual(0);
+        expect(tu.logLines.length).toEqual(2);
+        expect(tu.logLines[1]).toEqual('Identical offer id on new match, skipping.');
+        done();
+      });
+    });
+  });
+});
+
