@@ -476,13 +476,6 @@ function watchRuntime(options) {
             lastOfferPrice: offerData.price,
           });
 
-          // sometimes they change the content slightly for things we already notified on
-          // if this is a regular interval check (non-verbose) then do not send a message, just log
-          if (offerData.id == lastOfferID && !verbose) {
-            this.logger("Identical offer id on new match, skipping.");
-            return;
-          }
-
           // just match on the first one, then stop
           var match = null;
           for (var name in this.savedSettings.matching) {
@@ -494,10 +487,18 @@ function watchRuntime(options) {
 
           if (match != null) {
             const that = this;
+            // did we already notified on this one
+            if (!verbose && this.savedSettings.lastMatch == offerData.name) {
+              // log and return
+              this.logger("Identical offer id on new match, skipping.")
+              return;
+            }
+
             // remember the offer name for verification check on /buy
             await this.saveSettings({ lastMatch: offerData.name });
             // format the message and compare to the last one, if they are identical just skip it
             const msg = "Found a match for " + this.savedSettings.matching[match] + " ($" + offerData.price + ") in " + offerData.name + "\nhttps://lastbottlewines.com";
+
             // verbose means always report
             if (verbose || msg != this.savedSettings.lastMessage) {
               this.sendMessage(msg)
@@ -514,9 +515,9 @@ function watchRuntime(options) {
             }
           }
 
-          if (verbose)
+          if (verbose) {
             this.sendMessage("No matching terms in '" + offerData.name + "'");
-            this.logger("No matching terms for '" + offerData.name + "'");
+          }
         })
         .catch((e) => {
           this.logError(e);

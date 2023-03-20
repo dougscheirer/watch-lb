@@ -687,3 +687,24 @@ test('/now followed by interval with changed content by same offer ID', (done) =
   });
 });
 
+test('non-matching offer followed by interval with changed content by same offer ID but matching offer', (done) => {
+  return tu.loadBadTest().then(() => {
+    tu.api.testTextReceived('/now').then((res) => {
+      expect(tu.sendMessages[0].message).toEqual("No matching terms in 'pizza'");
+      expect(tu.sendMessages.length).toEqual(1);
+      // load another with different content but the same offerID
+      tu.loadGoodTest().then(async () => {
+        // advance clock > 15 min to activate interval check
+        MockDate.set(new Date(tu.adate).getTime() + durationParser("1 hour"));
+        tu.sendMessages=[];
+        tu.logLines=[];
+        // check with false to not force output
+        await tu.watcher.checkWines(false);
+        expect(tu.sendMessages[0].message).toEqual(posMatch);
+        expect(tu.sendMessages.length).toEqual(1);
+        done();
+      });
+    });
+  });
+});
+

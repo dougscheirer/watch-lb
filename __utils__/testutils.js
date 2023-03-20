@@ -174,7 +174,8 @@ var TestUtils = {
         return TestUtils.loadWatcher(async (url) => {
         // console.log("got a call for " + url);
         return { status: 200, data: 
-            "<html><head></head><body>Do not match stuff<h1 class=\"offer-name\">pizza</h1></body></html>", 
+            '<html><head></head><body>Do not match stuff<h1 class=\"offer-name\">pizza</h1><div class="purchase-it">' + 
+            '<a href="https://www.lastbottlewines.com/cart/add/LB8212.html" class="arrow-button"></div></body></html>"', 
             headers: [{ result: "pie" }] };
         });
     },
