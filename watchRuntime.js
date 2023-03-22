@@ -307,7 +307,7 @@ function watchRuntime(options) {
         return this.sendMessage("No recent offer matches found");
       }
       const retRows = rows.sort().slice(-1*retCount);
-      var message = 'Fetched ' + retRows + ' offers';
+      var message = 'Fetched ' + retRows.length + ' offers';
       for (i in retRows) {
         message += retRows[i] + ": " + await this.getAsync(retRows[i]) + "\n";
       }
