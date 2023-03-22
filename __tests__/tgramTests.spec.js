@@ -576,7 +576,7 @@ test('/recent', (done) => {
       tu.api.testTextReceived('/recent').then((res) => {
         expect(tu.sendMessages.length).toEqual(1);
         expect((new RegExp(recentRegex)).exec(tu.sendMessages[0].message).length).toEqual(2);
-        expect(tu.sendMessages[0].message.split("\n").length).toEqual(11);
+        expect(tu.sendMessages[0].message.split("\n").length).toEqual(12);
         done();
       })
     })
@@ -590,7 +590,7 @@ test('/recent 3', (done) => {
       await saveFakeMatches();
       tu.api.testTextReceived('/recent 3').then((res) => {
         expect(tu.sendMessages.length).toEqual(1);
-        expect(tu.sendMessages[0].message.split("\n").length).toEqual(4);
+        expect(tu.sendMessages[0].message.split("\n").length).toEqual(5);
         done();
       })
     })
