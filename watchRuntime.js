@@ -358,6 +358,10 @@ function watchRuntime(options) {
 
     this.sendMessage = async (message) => {
       this.logger("Sending message to " + this.chatid + " : " + message);
+      if (message.length > 4096) {
+        // elipseize messages that are too long
+        message = message.substring(0, 4093) + '...';
+      }
       return this.telegramApi.sendMessage(this.chatid, message);
     },
 
