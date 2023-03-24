@@ -40,11 +40,26 @@ test('sendMessage', (done) => {
   });
 });
 
-
 test('/now positive result', (done) => {
   return tu.loadGoodTest().then(() => {
     tu.api.testTextReceived('/now').then((res) => {
       expect(tu.sendMessages[0].message).toEqual(posMatch);
+      expect(tu.sendMessages.length).toEqual(1);
+      done();
+    });
+  });
+});
+
+test('/now positive result 24 hour timeout', (done) => {
+  return tu.loadGoodTest().then(() => {
+    tu.api.testTextReceived('/now').then( async (res) => {
+      expect(tu.sendMessages[0].message).toEqual(posMatch);
+      expect(tu.sendMessages.length).toEqual(1);
+      tu.sendMessages = [];
+      MockDate.set(new Date(tu.adate).getTime() + durationParser("1 day") + durationParser("1 minute"));
+      // passive check
+      await tu.watcher.checkWines(false);
+      expect(tu.sendMessages[0].message).toEqual("No updates for more than 24h");
       expect(tu.sendMessages.length).toEqual(1);
       done();
     });
@@ -102,6 +117,41 @@ test('/now bad parse + /showerror', (done) => {
     tu.sendMessages = [];
     await tu.api.testTextReceived('/showerror ' + match[0]);
     expect("Error " + match[0] + "\n" + tu.badTest2Content).toEqual(tu.sendMessages[0].message);
+    done();
+  });
+});
+
+test('/now bad parse + /showerror bad key', (done) => {
+  const getAsync = promisify(tu.redisClient.get).bind(tu.redisClient);
+
+  return tu.loadBadTest2().then(async () => {
+    await tu.api.testTextReceived('/now');
+    // expect a new redis value of 'offer-invalid-YYYYMMDDHHMMSS' with the bad test data
+    rx=/offer-invalid-(.*)/g;
+    const match = rx.exec(tu.sendMessages[0].message);
+    tu.sendMessages = [];
+    await tu.api.testTextReceived('/showerror pizza');
+    expect(tu.sendMessages[0].message).toEqual('No error key value pizza');
+    done();
+  });
+});
+
+test('/now good parse + /showerror', (done) => {
+  const getAsync = promisify(tu.redisClient.get).bind(tu.redisClient);
+
+  return tu.loadGoodTest().then(async () => {
+    await tu.api.testTextReceived('/showerror');
+    expect(tu.sendMessages[0].message).toEqual("/showerror requires an error key");
+    done();
+  });
+});
+
+test('/now good parse + /lserror', (done) => {
+  const getAsync = promisify(tu.redisClient.get).bind(tu.redisClient);
+
+  return tu.loadGoodTest().then(async () => {
+    await tu.api.testTextReceived('/lserror');
+    expect(tu.sendMessages[0].message).toEqual("No errors found");
     done();
   });
 });
@@ -448,8 +498,8 @@ test('/pause 1 day with datestamp', (done) => {
 test('/pause 1 hour with timestamp', (done) => {
   return tu.loadGoodTest().then(async () => {
     const now = new Date();
-    const dateString = (now.getMonth()+1) + '/' + (now.getDate()+1) + '/' + now.getFullYear();
-    await tu.api.testTextReceived('/pause ' + dateString);
+    const timeString = now.getHours() + ":" + now.getMinutes();
+    await tu.api.testTextReceived('/pause ' + timeString);
     const regex=/Pausing until/;
     expect(regex.test(tu.sendMessages[0].message)).toBeTruthy();
     expect(tu.sendMessages.length).toEqual(1);
@@ -460,7 +510,30 @@ test('/pause 1 hour with timestamp', (done) => {
     expect(regex2.test(tu.sendMessages[0].message)).toBeTruthy();
     expect(tu.sendMessages.length).toEqual(1);
     // advance clock >1 day
-    MockDate.set(new Date(tu.adate).getTime() + durationParser("1 day") + durationParser("1 minute"));
+    MockDate.set(new Date(tu.adate).getTime() + durationParser("1 hour") + durationParser("1 minute"));
+    tu.sendMessages=[];
+    await tu.watcher.checkWines(true);
+    expect(tu.sendMessages[0].message).toEqual(posMatch);
+    expect(tu.sendMessages.length).toEqual(1);
+    done();
+  });
+});
+
+test('/pause with no unit specified', (done) => {
+  return tu.loadGoodTest().then(async () => {
+    const now = new Date();
+    await tu.api.testTextReceived('/pause 60'); // unit is assumed minutes when unspecified
+    const regex=/Pausing until/;
+    expect(regex.test(tu.sendMessages[0].message)).toBeTruthy();
+    expect(tu.sendMessages.length).toEqual(1);
+    // make sure it will not check
+    tu.sendMessages=[];
+    await tu.watcher.checkWines(true);
+    const regex2=/Paused, will resume on/;
+    expect(regex2.test(tu.sendMessages[0].message)).toBeTruthy();
+    expect(tu.sendMessages.length).toEqual(1);
+    // advance clock >1 hour
+    MockDate.set(new Date(tu.adate).getTime() + durationParser("1 hour") + durationParser("1 minute"));
     tu.sendMessages=[];
     await tu.watcher.checkWines(true);
     expect(tu.sendMessages[0].message).toEqual(posMatch);
@@ -563,11 +636,13 @@ test('test with actual web fetch', (done) => {
   })
 });
 
-async function saveFakeMatches() {
-  for (var i = 0; i < 30; i++) {
+async function saveFakeMatches(count) {
+  count = (!!count ? count : 30);
+  for (var i = 0; i < count; i++) {
     await tu.watcher.setAsync('offer-match-20200315000' + (100+i), "this is a fake match " + i);
   }
 }
+
 test('/recent', (done) => {
   return tu.loadGoodTest().then(() => {
     tu.api.testTextReceived('/now').then(async (res) => {
@@ -604,6 +679,35 @@ test('/recent notnum', (done) => {
       tu.api.testTextReceived('/recent notnum').then((res) => {
         expect(tu.sendMessages.length).toEqual(1);
         expect(tu.sendMessages[0].message).toEqual("notnum is not a valid number.  Specify a number of offers to fetch");
+        done();
+      })
+    })
+  })
+});
+
+test('/recent with nothing', (done) => {
+  tu.redisClient.flushall();
+  return tu.loadBadTest().then(() => {
+    tu.api.testTextReceived('/now').then(async (res) => {
+      tu.sendMessages=[];
+      tu.api.testTextReceived('/recent').then((res) => {
+        expect(tu.sendMessages.length).toEqual(1);
+        expect(tu.sendMessages[0].message).toEqual("No recent offer matches found");
+        done();
+      })
+    })
+  })
+});
+
+test('/recent with large message', (done) => {
+  tu.redisClient.flushall();
+  return tu.loadBadTest().then(() => {
+    tu.api.testTextReceived('/now').then(async (res) => {
+      tu.sendMessages=[];
+      await saveFakeMatches(4000);
+      tu.api.testTextReceived('/recent 1000').then((res) => {
+        expect(tu.sendMessages.length).toEqual(1);
+        expect("...").toEqual(tu.sendMessages[0].message.substring(tu.sendMessages[0].message.length-3));
         done();
       })
     })
@@ -708,3 +812,40 @@ test('non-matching offer followed by interval with changed content by same offer
   });
 });
 
+test('create with no tgram api', (done) => {
+  try {
+    const watcher = new watchRuntime({
+      telegramApi: null, 
+      redisApi: tu.redisClient, 
+      chatid: "chatid", 
+      fetchFunc: () => {},
+      setInterval: tu.setIntFunc,
+      clearInterval: tu.clrIntFunc,
+      logger: tu.logCapture
+    });
+    expect(watcher).toEqual(null);
+  } catch (e) {
+    expect(e.message).toEqual("telegramApi is required");
+  } finally {
+    done();
+  }
+});
+
+test('create with no redis api', (done) => {
+  try {
+    const watcher = new watchRuntime({
+      telegramApi: {}, 
+      redisApi: null, 
+      chatid: "chatid", 
+      fetchFunc: () => {},
+      setInterval: tu.setIntFunc,
+      clearInterval: tu.clrIntFunc,
+      logger: tu.logCapture
+    });
+    expect(watcher).toEqual(null);
+  } catch (e) {
+    expect(e.message).toEqual("redis client is required");
+  } finally {
+    done();
+  }
+});

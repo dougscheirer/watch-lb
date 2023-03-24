@@ -609,6 +609,7 @@ function watchRuntime(options) {
   // errors
   this.telegramApi.onText(/\/lserror/, this.handleListErrors);
   this.telegramApi.onText(/\/showerror (.+)/, this.handleShowError);
+  this.telegramApi.onText(/\/showerror/, this.handleShowError);
   this.telegramApi.onText(/\/clrerror$/, this.handleClearError);
   this.telegramApi.onText(/\/clrerror (.+)/, this.handleClearError);
   // recent
