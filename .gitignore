@@ -2,3 +2,4 @@
 .env*
 git-head.txt
 /redis-docker-data
+/coverage
