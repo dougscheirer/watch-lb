@@ -531,6 +531,7 @@ function watchRuntime(options) {
     /* jshint expr: true */
     this.loadSettings = async () => {
       this.logger("loadSettings");
+      
       return this.getAsync('watch-lb-settings').then(async (res) => {
         this.logger("Inside getAsync.then");
         if (!res) {
@@ -569,10 +570,6 @@ function watchRuntime(options) {
         this.logger("setting the interval");
         this.runtimeSettings.intervalTimer = this.setInterval(this.checkWines, 1000 * 60 * this.savedSettings.defaultRate);
       });
-    },
-
-    this.logStartTime = () => {
-      this.runtimeSettings.startTime = new Date();
     },
 
     // shutdown
