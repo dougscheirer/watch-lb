@@ -309,7 +309,8 @@ function watchRuntime(options) {
       const retRows = rows.sort().slice(-1*retCount);
       var message = 'Fetched ' + retRows.length + ' offers\n';
       for (i in retRows) {
-        message += retRows[i] + ": " + await this.getAsync(retRows[i]) + "\n";
+        const val = await this.getAsync(retRows[i]);
+        message += retRows[i] + ": " + JSON.stringify(JSON.parse(val), null, 2) + "\n";
       }
       return this.sendMessage(message);
     },

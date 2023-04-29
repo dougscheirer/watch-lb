@@ -15,7 +15,7 @@ const tu = require('../__utils__/testutils');
 const posMatch =  "Found a match for cabernet ($89) in Groth Oakville Cabernet Sauvignon Reserve 2015\nhttps://lastbottlewines.com";
 const baseCheckRegex = "Last check at (.*)\nLast difference at (.*)\nLast offer: \\(LB8212\\) Groth Oakville Cabernet Sauvignon Reserve 2015 \\$89\nLast MD5: (.*)\nCurrent interval: 15 minutes\n";
 const serviceRegex = "Service uptime: (.*)\n"
-const recentRegex = 'offer-match-([0-9]+): {"name":"Groth Oakville Cabernet Sauvignon Reserve 2015","price":"89","link":"https://www.lastbottlewines.com/cart/add/LB8212.html","id":"LB8212","md5":"1e5efef7c1494301ead78139cd413143"}';
+const recentRegex = 'offer-match-([0-9]+): {\n  "name": "Groth Oakville Cabernet Sauvignon Reserve 2015",\n'
 
 beforeEach(() => {
   tu.reset();
@@ -639,7 +639,7 @@ test('test with actual web fetch', (done) => {
 async function saveFakeMatches(count) {
   count = (!!count ? count : 30);
   for (var i = 0; i < count; i++) {
-    await tu.watcher.setAsync('offer-match-20200315000' + (100+i), "this is a fake match " + i);
+    await tu.watcher.setAsync('offer-match-20200315000' + (100+i), JSON.stringify({'offerid': i, 'message': 'this is a fake match'}));
   }
 }
 
@@ -651,7 +651,7 @@ test('/recent', (done) => {
       tu.api.testTextReceived('/recent').then((res) => {
         expect(tu.sendMessages.length).toEqual(1);
         expect((new RegExp(recentRegex)).exec(tu.sendMessages[0].message).length).toEqual(2);
-        expect(tu.sendMessages[0].message.split("\n").length).toEqual(12);
+        expect(tu.sendMessages[0].message.split("\n").length).toEqual(45);
         done();
       })
     })
@@ -665,7 +665,7 @@ test('/recent 3', (done) => {
       await saveFakeMatches();
       tu.api.testTextReceived('/recent 3').then((res) => {
         expect(tu.sendMessages.length).toEqual(1);
-        expect(tu.sendMessages[0].message.split("\n").length).toEqual(5);
+        expect(tu.sendMessages[0].message.split("\n").length).toEqual(17);
         done();
       })
     })
