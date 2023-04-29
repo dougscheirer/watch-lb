@@ -627,6 +627,7 @@ function watchRuntime(options) {
       "/lserror\n" +
       "/showerror (key)\n" +
       "/clrerror [key]\n" + 
+      "/recent [count]\n" + 
       "/help");
   });
   // /settings
