@@ -12,7 +12,7 @@ const { promisify } = require('util');
 const tu = require('../__utils__/testutils');
 
 // for use elsewhere
-const posMatch =  'Found a match for cabernet ($89) in <a href="https://www.lastbottlewines.com/cart/add/LB8212.html">Groth Oakville Cabernet Sauvignon Reserve 2015</a>';
+const posMatch =  'Found a <a href="https://lastbottlewines.com">match</a> for cabernet ($89) in <a href="https://www.lastbottlewines.com/cart/add/LB8212.html">Groth Oakville Cabernet Sauvignon Reserve 2015</a>';
 const baseCheckRegex = "Last check at (.*)\nLast difference at (.*)\nLast offer: \\(LB8212\\) Groth Oakville Cabernet Sauvignon Reserve 2015 \\$89\nLast MD5: (.*)\nCurrent interval: 15 minutes\n";
 const serviceRegex = "Service uptime: (.*)\n"
 const recentRegex = 'offer-match-([0-9]+): {\n  "name": "Groth Oakville Cabernet Sauvignon Reserve 2015",\n'
@@ -370,7 +370,7 @@ test('/add pizza', (done) => {
     const regex=/pizza/;
     expect(regex.test(tu.sendMessages[0].message)).toBeTruthy();
     expect(tu.sendMessages.length).toEqual(2);
-    expect(/Found a match/.test(tu.sendMessages[1].message)).toBeTruthy();
+    expect(/Found a /.test(tu.sendMessages[1].message)).toBeTruthy();
     done();
   });
 });

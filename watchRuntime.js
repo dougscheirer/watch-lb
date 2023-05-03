@@ -503,7 +503,7 @@ function watchRuntime(options) {
             // remember the offer name for verification check on /buy
             await this.saveSettings({ lastMatch: offerData.name });
             // format the message and compare to the last one, if they are identical just skip it
-            const msg = "Found a match for " + this.savedSettings.matching[match] + " ($" + offerData.price + ") in " 
+            const msg = 'Found a <a href="https://lastbottlewines.com">match</a> for ' + this.savedSettings.matching[match] + " ($" + offerData.price + ") in " 
                         + '<a href="' + offerData.link + '">' + offerData.name + "</a>";
 
             // verbose means always report
