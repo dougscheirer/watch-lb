@@ -20,8 +20,8 @@ function tgramMock(chatId, cb, options) {
       return;
     };
   },
-  this.sendMessage = (chat_id,  msg) => {
-    this.sendMsgCallback(chat_id, msg);
+  this.sendMessage = (chat_id,  msg, opts) => {
+    this.sendMsgCallback(chat_id, msg, opts);
   }
 }
 

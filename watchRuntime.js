@@ -363,7 +363,7 @@ function watchRuntime(options) {
         // elipseize messages that are too long
         message = message.substring(0, 4093) + '...';
       }
-      return this.telegramApi.sendMessage(this.chatid, message);
+      return this.telegramApi.sendMessage(this.chatid, message, { parse_mode: 'HTML' });
     },
 
     this.parseOfferLink = (text) => {
@@ -502,7 +502,8 @@ function watchRuntime(options) {
             // remember the offer name for verification check on /buy
             await this.saveSettings({ lastMatch: offerData.name });
             // format the message and compare to the last one, if they are identical just skip it
-            const msg = "Found a match for " + this.savedSettings.matching[match] + " ($" + offerData.price + ") in " + offerData.name + "\nhttps://lastbottlewines.com";
+            const msg = "Found a match for " + this.savedSettings.matching[match] + " ($" + offerData.price + ") in " 
+                        + '<a href="' + offerData.link + '">' + offerData.name + "</a>";
 
             // verbose means always report
             if (verbose || msg != this.savedSettings.lastMessage) {

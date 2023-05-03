@@ -128,7 +128,8 @@ var TestUtils = {
         MockDate.set(TestUtils.adate);
         TestUtils.api = new tgramMock(
                 "chatid", 
-                function (chatid, msg) { TestUtils.sendMessages.push({ chatid: chatid, message: msg }); },
+                function (chatid, msg, opts) { 
+                    TestUtils.sendMessages.push({ chatid: chatid, message: msg, opts: opts }); },
                 { onlyFirstMatch: true },
         );
         // clean redis? 
