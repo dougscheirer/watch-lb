@@ -357,13 +357,14 @@ function watchRuntime(options) {
       this.sendMessage(message);
     },
 
-    this.sendMessage = async (message) => {
+    this.sendMessage = async (message, isHTML) => {
       this.logger("Sending message to " + this.chatid + " : " + message);
       if (message.length > 4096) {
         // elipseize messages that are too long
         message = message.substring(0, 4093) + '...';
       }
-      return this.telegramApi.sendMessage(this.chatid, message, { parse_mode: 'HTML' });
+      return this.telegramApi.sendMessage(this.chatid, message, 
+              (isHTML ? { parse_mode: 'HTML' } : {}));
     },
 
     this.parseOfferLink = (text) => {
@@ -507,7 +508,7 @@ function watchRuntime(options) {
 
             // verbose means always report
             if (verbose || msg != this.savedSettings.lastMessage) {
-              this.sendMessage(msg)
+              this.sendMessage(msg, true)
                 .then(async function (data) {
                   that.saveSettings({ lastMessage: msg });
                   that.logger(data);
